@@ -1679,6 +1679,8 @@ int main(int argc, const char **argv) // ignore_convention
 		SkipPWGen = true;	// skip automatic password generation
 	}
 
+	srand(time_timestamp());
+
 	CServer *pServer = CreateServer();
 	IKernel *pKernel = IKernel::Create();
 

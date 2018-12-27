@@ -1,6 +1,7 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <base/math.h>
+#include <base/tl/array.h>
 
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
@@ -26,6 +27,8 @@ enum
 	RESET,
 	NO_RESET
 };
+
+static bool IsSeparator(char c) { return c == ';' || c == ' ' || c == ',' || c == '\t'; };
 
 void CGameContext::Construct(int Resetting)
 {
@@ -1101,6 +1104,37 @@ void CGameContext::ConChangeMap(IConsole::IResult *pResult, void *pUserData)
 	pSelf->m_pController->ChangeMap(pResult->NumArguments() ? pResult->GetString(0) : "");
 }
 
+void CGameContext::ConChangeMapRandom(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	if (pResult->NumArguments())
+	{
+		const char *pMapList = pResult->GetString(0);
+		const char *pMap = pMapList;
+		array<char*> MapList;
+		while (*pMap)
+		{
+			int WordLen = 0;
+			while (pMap[WordLen] && !IsSeparator(pMap[WordLen]))
+				WordLen++;
+
+			if (WordLen)
+			{
+				char *pBuf = new char[WordLen + 1];
+				str_copy(pBuf, pMap, WordLen + 1);
+				MapList.add(pBuf);
+				pMap += WordLen;
+			}
+			pMap++;
+		}
+		pSelf->m_pController->ChangeMap(MapList[rand() % MapList.size()]);
+		for (int i = 0; i < MapList.size(); i++)
+			delete[] MapList[i];
+	}
+	else
+		pSelf->m_pController->ChangeMap("");
+}
+
 void CGameContext::ConRestart(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
@@ -1417,6 +1451,7 @@ void CGameContext::OnConsoleInit()
 
 	Console()->Register("pause", "?i", CFGFLAG_SERVER|CFGFLAG_STORE, ConPause, this, "Pause/unpause game");
 	Console()->Register("change_map", "?r", CFGFLAG_SERVER|CFGFLAG_STORE, ConChangeMap, this, "Change map");
+	Console()->Register("change_map_random", "?r", CFGFLAG_SERVER|CFGFLAG_STORE, ConChangeMapRandom, this, "Change map random");
 	Console()->Register("restart", "?i", CFGFLAG_SERVER|CFGFLAG_STORE, ConRestart, this, "Restart in x seconds (0 = abort)");
 	Console()->Register("say", "r", CFGFLAG_SERVER, ConSay, this, "Say in chat");
 	Console()->Register("broadcast", "r", CFGFLAG_SERVER, ConBroadcast, this, "Broadcast message");
