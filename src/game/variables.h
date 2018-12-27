@@ -138,6 +138,8 @@ MACRO_CONFIG_INT(DbgFocus, dbg_focus, 0, 0, 1, CFGFLAG_CLIENT, "")
 MACRO_CONFIG_INT(DbgTuning, dbg_tuning, 0, 0, 1, CFGFLAG_CLIENT, "")
 
 // Teeworlds Tournaments
+MACRO_CONFIG_INT(ClHPBar, cl_hp_bar, 1, 0, 1, CFGFLAG_CLIENT|CFGFLAG_SAVE, "Activate HP bar for supported servers")
+
 MACRO_CONFIG_INT(SvReservedSlotsPlayers, sv_reserved_slots_players, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of Reserved Slots for players (rivals)")
 MACRO_CONFIG_STR(SvReservedSlotsPlayersPass, sv_reserved_slots_players_pass, 32, "", CFGFLAG_SERVER, "Password to access a Reserved Slot for players (rivals)")
 MACRO_CONFIG_INT(SvReservedSlotsAdmin, sv_reserved_slots_admin, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of Reserved Slots (tournament staff)")

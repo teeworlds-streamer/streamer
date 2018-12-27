@@ -33,6 +33,8 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy)
 	m_RespawnDisabled = GameServer()->m_pController->GetStartRespawnState();
 	m_DeadSpecMode = false;
 	m_Spawning = 0;
+
+	m_IsStreamer = false;
 }
 
 CPlayer::~CPlayer()
@@ -444,7 +446,7 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 		// update spectator modes
 		for(int i = 0; i < MAX_CLIENTS; ++i)
 		{
-			if(GameServer()->m_apPlayers[i] && GameServer()-> m_apPlayers[i]->m_SpecMode == SPEC_PLAYER && GameServer()->m_apPlayers[i]->m_SpectatorID == m_ClientID)
+			if(GameServer()->m_apPlayers[i] && GameServer()-> m_apPlayers[i]->m_SpecMode == SPEC_PLAYER && GameServer()->m_apPlayers[i]->m_SpectatorID == m_ClientID && !GameServer()->m_apPlayers[i]->IsStreamer())
 			{
 				if(GameServer()->m_apPlayers[i]->m_DeadSpecMode)
 					GameServer()->m_apPlayers[i]->UpdateDeadSpecMode();
@@ -455,6 +457,8 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 				}
 			}
 		}
+
+		GameServer()->SendHpOfAll(GetCID());
 	}
 }
 

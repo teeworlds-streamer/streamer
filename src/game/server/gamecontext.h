@@ -143,6 +143,9 @@ public:
 	void SendMotd(int ClientID);
 	void SendSettings(int ClientID);
 
+	void SendHp(int ClientID, int Health, int Armor, int To = -1);
+	void SendHpOfAll(int To);
+
 	void SendGameMsg(int GameMsgID, int ClientID);
 	void SendGameMsg(int GameMsgID, int ParaI1, int ClientID);
 	void SendGameMsg(int GameMsgID, int ParaI1, int ParaI2, int ParaI3, int ClientID);

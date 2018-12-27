@@ -293,6 +293,38 @@ void CGameContext::SendSettings(int ClientID)
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
+void CGameContext::SendHp(int ClientID, int Health, int Armor, int To)
+{
+	CNetMsg_Sv_Hp Msg;
+	Msg.m_ClientID = ClientID;
+	Msg.m_Health = clamp(Health, 0, 10);
+	Msg.m_Armor = clamp(Armor, 0, 10);
+
+	if (To == -1)
+	{
+		for (int i = 0; i < MAX_CLIENTS; i++)
+		if (m_apPlayers[i] && m_apPlayers[i]->IsStreamer() && m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS)
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
+	}
+	else
+	{
+		if (m_apPlayers[To] && m_apPlayers[To]->IsStreamer() && m_apPlayers[To]->GetTeam() == TEAM_SPECTATORS)
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, To);
+	}
+}
+
+void CGameContext::SendHpOfAll(int To)
+{
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CCharacter *pChar = GetPlayerChar(i);
+		if (!pChar || i == To)
+			continue;
+
+		SendHp(i, pChar->Health(), pChar->Armor(), To);
+	}
+}
+
 
 void CGameContext::SendGameMsg(int GameMsgID, int ClientID)
 {
@@ -990,6 +1022,11 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			pPlayer->m_LastReadyChange = Server()->Tick();
 			m_pController->OnPlayerReadyChange(pPlayer);
+		}
+		else if (MsgID == NETMSGTYPE_CL_STREAMER)
+		{
+			pPlayer->SetStreamer();
+			SendHpOfAll(pPlayer->GetCID());
 		}
 	}
 	else

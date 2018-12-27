@@ -635,6 +635,9 @@ bool CCharacter::IncreaseHealth(int Amount)
 	if(m_Health >= 10)
 		return false;
 	m_Health = clamp(m_Health+Amount, 0, 10);
+
+	GameServer()->SendHp(m_pPlayer->GetCID(), m_Health, m_Armor);
+	
 	return true;
 }
 
@@ -643,6 +646,9 @@ bool CCharacter::IncreaseArmor(int Amount)
 	if(m_Armor >= 10)
 		return false;
 	m_Armor = clamp(m_Armor+Amount, 0, 10);
+
+	GameServer()->SendHp(m_pPlayer->GetCID(), m_Health, m_Armor);
+	
 	return true;
 }
 
@@ -713,6 +719,8 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 		}
 
 		m_Health -= Dmg;
+
+		GameServer()->SendHp(m_pPlayer->GetCID(), m_Health, m_Armor);
 	}
 
 	// create healthmod indicator

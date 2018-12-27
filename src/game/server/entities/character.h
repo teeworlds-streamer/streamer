@@ -58,6 +58,9 @@ public:
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 
+	int Health() { return m_Health; }
+	int Armor() { return m_Armor; }
+
 private:
 	// player controlling this character
 	class CPlayer *m_pPlayer;

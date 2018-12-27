@@ -112,6 +112,9 @@ public:
 		int m_Max;
 	} m_Latency;
 
+	void SetStreamer() { m_IsStreamer = true; }
+	bool IsStreamer() const { return m_IsStreamer; };
+
 private:
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;
@@ -130,6 +133,8 @@ private:
 	int m_SpectatorID;
 	class CFlag *m_pSpecFlag;
 	bool m_ActiveSpecSwitch;
+
+	bool m_IsStreamer;
 };
 
 #endif

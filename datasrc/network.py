@@ -408,4 +408,12 @@ Messages = [
 		NetStringStrict("m_Reason"),
 		NetBool("m_Force"),
 	]),
+
+	NetMessage("Cl_Streamer", []),
+
+	NetMessage("Sv_Hp",[
+		NetIntRange("m_ClientID", 0, 'MAX_CLIENTS-1'),
+		NetIntRange("m_Health", 0, 10),
+		NetIntRange("m_Armor", 0, 10),
+	]),
 ]
