@@ -4,7 +4,11 @@
 #define GAME_VERSION_H
 #include <generated/nethash.cpp>
 #define GAME_VERSION "0.7.2"
-#define GAME_NETVERSION "0.7 " GAME_NETVERSION_HASH
+// #define GAME_NETVERSION "0.7 " GAME_NETVERSION_HASH
+#define GAME_NETVERSION "0.7 802f1be60a05665f"
 #define CLIENT_VERSION 0x0702
 static const char GAME_RELEASE_VERSION[8] = "0.7.2";
+
+#define GAME_MODVERSION "4.0"
+
 #endif

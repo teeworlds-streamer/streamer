@@ -41,7 +41,7 @@ public:
 };
 
 
-class CServerBan : public CNetBan
+	class CServerBan : public CNetBan
 {
 	class CServer *m_pServer;
 

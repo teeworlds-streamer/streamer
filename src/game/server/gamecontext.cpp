@@ -1354,6 +1354,14 @@ void CGameContext::ConVote(IConsole::IResult *pResult, void *pUserData)
 	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
 }
 
+void CGameContext::ConVersion(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "%s", GAME_MODVERSION);
+	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "TeeworldsTournaments-Version", aBuf);
+}
+
 void CGameContext::ConchainSpecialMotdupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	pfnCallback(pResult, pCallbackUserData);
@@ -1412,6 +1420,7 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("remove_vote", "s", CFGFLAG_SERVER, ConRemoveVote, this, "remove a voting option");
 	Console()->Register("clear_votes", "", CFGFLAG_SERVER, ConClearVotes, this, "Clears the voting options");
 	Console()->Register("vote", "r", CFGFLAG_SERVER, ConVote, this, "Force a vote to yes/no");
+	Console()->Register("version", "", CFGFLAG_SERVER, ConVersion, this, "Prints the TeeworldsTournaments-Version");
 }
 
 void CGameContext::OnInit()
@@ -1534,5 +1543,6 @@ bool CGameContext::IsClientPlayer(int ClientID) const
 const char *CGameContext::GameType() const { return m_pController && m_pController->GetGameType() ? m_pController->GetGameType() : ""; }
 const char *CGameContext::Version() const { return GAME_VERSION; }
 const char *CGameContext::NetVersion() const { return GAME_NETVERSION; }
+const char *CGameContext::ModVersion() const { return GAME_MODVERSION; }
 
 IGameServer *CreateGameServer() { return new CGameContext; }
