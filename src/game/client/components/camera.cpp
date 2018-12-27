@@ -32,13 +32,18 @@ CCamera::CCamera()
 
 	m_CurrentPosition = -1;
 	m_MoveTime = 0.0f;
+
+	m_Zoom = 1.0f;
 }
 
 void CCamera::OnRender()
 {
+	if (Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+		m_Zoom = 1.0f;
+
 	if(Client()->State() == IClient::STATE_ONLINE || Client()->State() == IClient::STATE_DEMOPLAYBACK)
 	{
-		m_Zoom = 1.0f;
+		// m_Zoom = 1.0f;
 
 		// update camera center
 		if(m_pClient->m_Snap.m_SpecInfo.m_Active && !m_pClient->m_Snap.m_SpecInfo.m_UsePosition &&
@@ -136,9 +141,32 @@ void CCamera::ConSetPosition(IConsole::IResult *pResult, void *pUserData)
 		pSelf->ChangePosition(PositionNumber);
 }
 
+void CCamera::ConKeyZoomIn(IConsole::IResult *pResult, void *pUserData)
+{
+	CCamera *pSelf = (CCamera *)pUserData;
+	if (((CCamera *)pUserData)->Client()->State() == IClient::STATE_DEMOPLAYBACK || ((CCamera *)pUserData)->m_pClient->m_Snap.m_SpecInfo.m_Active)
+		pSelf->m_Zoom = clamp(pSelf->m_Zoom - 0.1f, 0.2f, 4.8f);
+}
+
+void CCamera::ConKeyZoomOut(IConsole::IResult *pResult, void *pUserData)
+{
+	CCamera *pSelf = (CCamera *)pUserData;
+	if (((CCamera *)pUserData)->Client()->State() == IClient::STATE_DEMOPLAYBACK || ((CCamera *)pUserData)->m_pClient->m_Snap.m_SpecInfo.m_Active)
+		pSelf->m_Zoom = clamp(pSelf->m_Zoom + 0.1f, 0.2f, 4.8f);
+}
+
+void CCamera::ConZoomReset(IConsole::IResult *pResult, void *pUserData)
+{
+	CCamera *pSelf = (CCamera *)pUserData;
+	pSelf->m_Zoom = 1.0f;
+}
+
 void CCamera::OnConsoleInit()
 {
 	Console()->Register("set_position", "iii", CFGFLAG_CLIENT, ConSetPosition, this, "Sets the rotation position");
+	Console()->Register("+zoomin", "", CFGFLAG_CLIENT, ConKeyZoomIn, this, "Zooms in");
+	Console()->Register("+zoomout", "", CFGFLAG_CLIENT, ConKeyZoomOut, this, "Zooms out");
+	Console()->Register("zoomreset", "", CFGFLAG_CLIENT, ConZoomReset, this, "Resets the zoom to default");
 }
 
 void CCamera::OnStateChange(int NewState, int OldState)
