@@ -1,0 +1,1398 @@
+diff --git a/teeworlds-0.6.2-source/src/engine/server/server.cpp b/TeeworldsTournaments_src_experimental/src/engine/server/server.cpp
+--- a/teeworlds-0.6.2-source/src/engine/server/server.cpp
++++ b/TeeworldsTournaments_src_experimental/src/engine/server/server.cpp
+@@ -799,6 +799,9 @@ void CServer::UpdateClientRconCommands()
+ void CServer::ProcessClientPacket(CNetChunk *pPacket)
+ {
+ 	int ClientID = pPacket->m_ClientID;
++	int PlayerCount = 0; // TeeworldsTournaments
++	int ReservedSlotsPlayers = g_Config.m_SvReservedSlotsPlayers; // Teeworlds Tournaments
++	int ReservedSlotsAdmin = g_Config.m_SvReservedSlotsAdmin; // Teeworlds Tournaments
+ 	CUnpacker Unpacker;
+ 	Unpacker.Reset(pPacket->m_pData, pPacket->m_DataSize);
+
+@@ -835,6 +838,46 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
+ 					return;
+ 				}
+
++				for (int i = 0; i < MAX_CLIENTS; i++) //TeeworldsTournaments
++				{
++					if (m_aClients[i].m_State != CClient::STATE_EMPTY)
++						PlayerCount++;
++
++					if (m_aClients[i].m_Slot == 1)
++						ReservedSlotsPlayers--;
++					else if (m_aClients[i].m_Slot == 2)
++						ReservedSlotsAdmin--;
++
++					char aBuf[256];
++					str_format(aBuf, sizeof(aBuf), "PlayerCount: %d; RSPlayers: %d; RSAdmin: %d", PlayerCount, ReservedSlotsPlayers, ReservedSlotsAdmin);
++					Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", aBuf);
++				}
++
++
++
++				if (ReservedSlotsPlayers > 0 && PlayerCount > g_Config.m_SvMaxClients - ReservedSlotsPlayers - ReservedSlotsAdmin // Teeworlds Tournaments
++					&& g_Config.m_SvReservedSlotsPlayersPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsPlayersPass, pPassword) == 0)
++				{
++					// Client is player
++					m_aClients[ClientID].m_Slot = 1;
++				//	ReservedSlotsPlayers--; // ToDo: Move outside of this procedure
++				}
++				else if (ReservedSlotsAdmin > 0 && PlayerCount > g_Config.m_SvMaxClients - ReservedSlotsPlayers - ReservedSlotsAdmin  // Teeworlds Tournaments
++					&& g_Config.m_SvReservedSlotsAdminPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsAdminPass, pPassword) == 0)
++				{
++					// Client is Admin
++					m_aClients[ClientID].m_Slot = 2;
++				//	ReservedSlotsAdmin--;
++				}
++				else if (PlayerCount > g_Config.m_SvMaxClients - ReservedSlotsPlayers - ReservedSlotsAdmin
++					&& ((ReservedSlotsPlayers > 0 && g_Config.m_SvReservedSlotsPlayersPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsPlayersPass, pPassword) != 0)
++					|| (ReservedSlotsAdmin > 0 && g_Config.m_SvReservedSlotsAdminPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsAdminPass, pPassword) != 0))) //TeeworldsTournaments
++				{
++					/* wrong password */
++					m_NetServer.Drop(ClientID, "Reserved Slot - password");
++					return;
++				}
++
+ 				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+ 				SendMap(ClientID);
+ 			}
+@@ -1287,6 +1330,9 @@ int CServer::Run()
+ 	str_format(aBuf, sizeof(aBuf), "version %s", GameServer()->NetVersion());
+ 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
+
++	str_format(aBuf, sizeof(aBuf), "teeworldstournaments-version %s", GameServer()->ModVersion()); // TeeworldsTournaments
++	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
++
+ 	// process pending commands
+ 	m_pConsole->StoreCommands(false);
+
+@@ -1494,6 +1540,25 @@ bool CServer::DemoRecorder_IsRecording()
+ 	return m_DemoRecorder.IsRecording();
+ }
+
++void CServer::DemoRecorder_Start(const char *pFilename, bool WithTimestamp)
++{
++	char aFilename[128];
++	if(WithTimestamp)
++	{
++		char aDate[20];
++		str_timestamp(aDate, sizeof(aDate));
++		str_format(aFilename, sizeof(aFilename), "demos/%s_%s.demo", pFilename, aDate);
++	}
++	else
++		str_format(aFilename, sizeof(aFilename), "demos/%s.demo", pFilename);
++	m_DemoRecorder.Start(Storage(), m_pConsole, aFilename, GameServer()->NetVersion(), m_aCurrentMap, m_CurrentMapCrc, "server");
++}
++
++void CServer::DemoRecorder_Stop()
++{
++	m_DemoRecorder.Stop();
++}
++
+ void CServer::ConRecord(IConsole::IResult *pResult, void *pUser)
+ {
+ 	CServer* pServer = (CServer *)pUser;
+@@ -1664,6 +1729,8 @@ int main(int argc, const char **argv) // ignore_convention
+ 	}
+ #endif
+
++	srand(time_timestamp());
++
+ 	CServer *pServer = CreateServer();
+ 	IKernel *pKernel = IKernel::Create();
+
+diff --git a/teeworlds-0.6.2-source/src/engine/server/server.h b/TeeworldsTournaments_src_experimental/src/engine/server/server.h
+--- a/teeworlds-0.6.2-source/src/engine/server/server.h
++++ b/TeeworldsTournaments_src_experimental/src/engine/server/server.h
+@@ -102,8 +102,16 @@ public:
+ 			int m_GameTick; // the tick that was chosen for the input
+ 		};
+
++		enum State
++		{
++			SLOT_DEFAULT = 0,
++			SLOT_PLAYER,
++			SLOT_ADMIN
++		};
++
+ 		// connection state info
+ 		int m_State;
++		int m_Slot;
+ 		int m_Latency;
+ 		int m_SnapRate;
+
+@@ -171,6 +179,8 @@ public:
+
+ 	void DemoRecorder_HandleAutoStart();
+ 	bool DemoRecorder_IsRecording();
++	void DemoRecorder_Start(const char *pFilename, bool WithTimestamp);
++	void DemoRecorder_Stop();
+
+ 	//int Tick()
+ 	int64 TickStartTime(int Tick);
+diff --git a/teeworlds-0.6.2-source/src/engine/server.h b/TeeworldsTournaments_src_experimental/src/engine/server.h
+--- a/teeworlds-0.6.2-source/src/engine/server.h
++++ b/TeeworldsTournaments_src_experimental/src/engine/server.h
+@@ -66,6 +66,8 @@ public:
+
+ 	virtual void DemoRecorder_HandleAutoStart() = 0;
+ 	virtual bool DemoRecorder_IsRecording() = 0;
++	virtual void DemoRecorder_Start(const char *pFilename, bool WithTimestamp) = 0;
++	virtual void DemoRecorder_Stop() = 0;
+ };
+
+ class IGameServer : public IInterface
+@@ -96,7 +98,8 @@ public:
+ 	virtual const char *GameType() = 0;
+ 	virtual const char *Version() = 0;
+ 	virtual const char *NetVersion() = 0;
++	virtual const char *ModVersion() = 0;
+ };
+
+ extern IGameServer *CreateGameServer();
+diff --git a/teeworlds-0.6.2-source/src/game/client/components/camera.cpp b/TeeworldsTournaments_src_experimental/src/game/client/components/camera.cpp
+--- a/teeworlds-0.6.2-source/src/game/client/components/camera.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/client/components/camera.cpp
+@@ -13,12 +13,39 @@
+ CCamera::CCamera()
+ {
+ 	m_CamType = CAMTYPE_UNDEFINED;
++	m_Zoom = 1.0f;
++}
++
++void CCamera::ConKeyZoomin(IConsole::IResult *pResult, void *pUserData)
++{
++	if (((CCamera *)pUserData)->Client()->State() == IClient::STATE_DEMOPLAYBACK || ((CCamera *)pUserData)->m_pClient->m_Snap.m_SpecInfo.m_Active)
++		((CCamera *)pUserData)->m_Zoom = clamp(((CCamera *)pUserData)->m_Zoom - 0.1f, 0.2f, 4.8f);
++}
++
++void CCamera::ConKeyZoomout(IConsole::IResult *pResult, void *pUserData)
++{
++	if (((CCamera *)pUserData)->Client()->State() == IClient::STATE_DEMOPLAYBACK || ((CCamera *)pUserData)->m_pClient->m_Snap.m_SpecInfo.m_Active)
++		((CCamera *)pUserData)->m_Zoom = clamp(((CCamera *)pUserData)->m_Zoom + 0.1f, 0.2f, 4.8f);
++}
++
++void CCamera::ConZoomreset(IConsole::IResult *pResult, void *pUserData)
++{
++	((CCamera *)pUserData)->m_Zoom = 1.0f;
++}
++
++void CCamera::OnConsoleInit()
++{
++	Console()->Register("+zoomin", "", CFGFLAG_CLIENT, ConKeyZoomin, this, "Zoom in");
++	Console()->Register("+zoomout", "", CFGFLAG_CLIENT, ConKeyZoomout, this, "Zoom out");
++	Console()->Register("zoomreset", "", CFGFLAG_CLIENT, ConZoomreset, this, "Reset zoom");
+ }
+
+ void CCamera::OnRender()
+ {
++	if (!m_pClient->m_Snap.m_SpecInfo.m_Active && Client()->State() != IClient::STATE_DEMOPLAYBACK)
++		m_Zoom = 1.0f;
+ 	//vec2 center;
+-	m_Zoom = 1.0f;
++	//m_Zoom = 1.0f;
+
+ 	// update camera center
+ 	if(m_pClient->m_Snap.m_SpecInfo.m_Active && !m_pClient->m_Snap.m_SpecInfo.m_UsePosition)
+diff --git a/teeworlds-0.6.2-source/src/game/client/components/camera.h b/TeeworldsTournaments_src_experimental/src/game/client/components/camera.h
+--- a/teeworlds-0.6.2-source/src/game/client/components/camera.h
++++ b/TeeworldsTournaments_src_experimental/src/game/client/components/camera.h
+@@ -21,7 +21,15 @@ public:
+ 	vec2 m_Center;
+ 	float m_Zoom;
+
++	bool m_ZoomBind;
++
++	static void ConKeyZoomin(IConsole::IResult *pResult, void *pUserData);
++	static void ConKeyZoomout(IConsole::IResult *pResult, void *pUserData);
++	static void ConZoom(IConsole::IResult *pResult, void *pUserData);
++	static void ConZoomreset(IConsole::IResult *pResult, void *pUserData);
++
+ 	CCamera();
++	virtual void OnConsoleInit();
+ 	virtual void OnRender();
+ };
+
+diff --git a/teeworlds-0.6.2-source/src/game/client/components/hud.cpp b/TeeworldsTournaments_src_experimental/src/game/client/components/hud.cpp
+--- a/teeworlds-0.6.2-source/src/game/client/components/hud.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/client/components/hud.cpp
+@@ -261,7 +261,7 @@ void CHud::MapscreenToGroup(float CenterX, float CenterY, CMapItemGroup *pGroup)
+ {
+ 	float Points[4];
+ 	RenderTools()->MapscreenToWorld(CenterX, CenterY, pGroup->m_ParallaxX/100.0f, pGroup->m_ParallaxY/100.0f,
+-		pGroup->m_OffsetX, pGroup->m_OffsetY, Graphics()->ScreenAspect(), 1.0f, Points);
++		pGroup->m_OffsetX, pGroup->m_OffsetY, Graphics()->ScreenAspect(), m_pClient->m_pCamera->m_Zoom, Points);
+ 	Graphics()->MapScreen(Points[0], Points[1], Points[2], Points[3]);
+ }
+
+diff --git a/teeworlds-0.6.2-source/src/game/client/components/maplayers.cpp b/TeeworldsTournaments_src_experimental/src/game/client/components/maplayers.cpp
+--- a/teeworlds-0.6.2-source/src/game/client/components/maplayers.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/client/components/maplayers.cpp
+@@ -48,7 +48,7 @@ void CMapLayers::MapScreenToGroup(float CenterX, float CenterY, CMapItemGroup *p
+ {
+ 	float Points[4];
+ 	RenderTools()->MapscreenToWorld(CenterX, CenterY, pGroup->m_ParallaxX/100.0f, pGroup->m_ParallaxY/100.0f,
+-		pGroup->m_OffsetX, pGroup->m_OffsetY, Graphics()->ScreenAspect(), 1.0f, Points);
++		pGroup->m_OffsetX, pGroup->m_OffsetY, Graphics()->ScreenAspect(), m_pClient->m_pCamera->m_Zoom, Points);
+ 	Graphics()->MapScreen(Points[0], Points[1], Points[2], Points[3]);
+ }
+
+@@ -234,9 +234,15 @@ void CMapLayers::OnRender()
+ 					CQuad *pQuads = (CQuad *)m_pLayers->Map()->GetDataSwapped(pQLayer->m_Data);
+
+ 					Graphics()->BlendNone();
+-					RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_OPAQUE, EnvelopeEval, this);
++					if(!g && !l)
++						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_OPAQUE, EnvelopeEval, this, m_pClient->m_pCamera->m_Zoom);
++					else
++						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_OPAQUE, EnvelopeEval, this);
+ 					Graphics()->BlendNormal();
+-					RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_TRANSPARENT, EnvelopeEval, this);
++					if(!g && !l)
++						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_TRANSPARENT, EnvelopeEval, this, m_pClient->m_pCamera->m_Zoom);
++					else
++						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_TRANSPARENT, EnvelopeEval, this);
+ 				}
+
+ 				//layershot_end();
+diff --git a/TeeworldsTournaments_src_experimental/src/game/client/components/streamer.cpp b/TeeworldsTournaments_src_experimental/src/game/client/components/streamer.cpp
+new file mode 100755
+index 0000000..5effa3d
+--- /dev/null
++++ b/TeeworldsTournaments_src_experimental/src/game/client/components/streamer.cpp
+@@ -0,0 +1,106 @@
++/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
++/* If you are missing that file, acquire a complete release at teeworlds.com.                */
++
++#include <engine/shared/config.h>
++#include <engine/graphics.h>
++#include <engine/client.h>
++#include <game/generated/protocol.h>
++#include <game/client/render.h>
++#include "streamer.h"
++
++CStreamer::CHpInfo::CHpInfo()
++{
++	m_Health = -1;
++	m_Armor = -1;
++}
++
++void CStreamer::RenderHp(const CNetObj_Character *pPrevChar, const CNetObj_Character *pPlayerChar, int ClientID)
++{
++	int Health = m_CHpInfos[ClientID].m_Health;
++	int Armor = m_CHpInfos[ClientID].m_Armor;
++
++	if(Health < 0 && Armor < 0)
++		return;
++
++	float IntraTick = Client()->IntraGameTick();
++
++	vec2 Position = mix(vec2(pPrevChar->m_X, pPrevChar->m_Y), vec2(pPlayerChar->m_X, pPlayerChar->m_Y), IntraTick);
++
++	float YOffset = g_Config.m_ClNameplates ? 91.0f : 53.0f;
++	float TotalWidth = 150.0f;
++	float Height = 10.0f;
++	float HealthWidth = (TotalWidth/10.0f)*(float)Health;
++	float ArmorWidth = (TotalWidth/10.0f)*(float)Armor;
++
++	Graphics()->TextureSet(-1);
++	Graphics()->QuadsBegin();
++
++	// health background
++	Graphics()->SetColor(0.0f, 0.0f, 0.0f, 0.5f);
++	RenderTools()->DrawRoundRect(Position.x-TotalWidth/2.0f-1.0f, Position.y-YOffset-1.0f, TotalWidth+2.0f, Height+2.0f, 6.0f);
++
++	// health
++	if(Health > 0)
++	{
++		Graphics()->SetColor(0.8f, 0.0f, 0.0f, 0.7f);
++		RenderTools()->DrawRoundRect(Position.x-TotalWidth/2.0f, Position.y-YOffset, HealthWidth, Height, 5.0f);
++	}
++
++	YOffset -= 15.0f;
++
++	// armor background
++	Graphics()->SetColor(0.0f, 0.0f, 0.0f, 0.5f);
++	RenderTools()->DrawRoundRect(Position.x-TotalWidth/2.0f-1.0f, Position.y-YOffset-1.0f, TotalWidth+2.0f, Height+2.0f, 6.0f);
++
++	// armor
++	if(Armor > 0)
++	{
++		Graphics()->SetColor(1.0f, 1.0f, 0.0f, 0.7f);
++		RenderTools()->DrawRoundRect(Position.x-TotalWidth/2.0f, Position.y-YOffset, ArmorWidth, Height, 5.0f);
++	}
++
++	Graphics()->QuadsEnd();
++}
++
++void CStreamer::OnStateChange(int NewState, int OldState)
++{
++	// send streamer message for the server to know that we can stream
++	if(NewState == IClient::STATE_ONLINE)
++	{
++		CNetMsg_Cl_Streamer Msg;
++		Client()->SendPackMsg(&Msg, MSGFLAG_VITAL);
++	}
++}
++
++void CStreamer::OnRender()
++{
++	if ((Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK) || !m_pClient->m_Snap.m_SpecInfo.m_Active || !g_Config.m_ClHPBar)
++		return;
++
++	for(int i = 0; i < MAX_CLIENTS; i++)
++	{
++		// only render active characters
++		if(!m_pClient->m_Snap.m_aCharacters[i].m_Active)
++			continue;
++
++		RenderHp(&m_pClient->m_Snap.m_aCharacters[i].m_Prev, &m_pClient->m_Snap.m_aCharacters[i].m_Cur, i);
++	}
++}
++
++void CStreamer::OnMessage(int MsgType, void *pRawMsg)
++{
++	/*if(Client()->State() == IClient::STATE_DEMOPLAYBACK)		//Show hp bars in demo playback
++		return;*/
++
++	if(MsgType == NETMSGTYPE_SV_HP)
++	{
++		CNetMsg_Sv_Hp *pMsg = (CNetMsg_Sv_Hp *)pRawMsg;
++
++		int ClientID = pMsg->m_ClientID;
++		if(ClientID >= 0 && ClientID < MAX_CLIENTS)
++		{
++			m_CHpInfos[ClientID].m_Health = pMsg->m_Health;
++			m_CHpInfos[ClientID].m_Armor = pMsg->m_Armor;
++		}
++	}
++}
+diff --git a/TeeworldsTournaments_src_experimental/src/game/client/components/streamer.h b/TeeworldsTournaments_src_experimental/src/game/client/components/streamer.h
+new file mode 100755
+index 0000000..774778d
+--- /dev/null
++++ b/TeeworldsTournaments_src_experimental/src/game/client/components/streamer.h
+@@ -0,0 +1,26 @@
++/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
++/* If you are missing that file, acquire a complete release at teeworlds.com.                */
++#ifndef GAME_CLIENT_COMPONENTS_STREMAER_H
++#define GAME_CLIENT_COMPONENTS_STREMAER_H
++
++#include <game/client/component.h>
++
++class CStreamer : public CComponent
++{
++	void RenderHp(const CNetObj_Character *pPrevChar, const CNetObj_Character *pPlayerChar, int ClientID);
++
++	class CHpInfo
++	{
++	public:
++		CHpInfo();
++
++		int m_Health;
++		int m_Armor;
++	} m_CHpInfos[MAX_CLIENTS];
++
++public:
++	virtual void OnStateChange(int NewState, int OldState);
++	virtual void OnRender();
++	virtual void OnMessage(int MsgType, void *pRawMsg);
++};
++#endif
+diff --git a/teeworlds-0.6.2-source/src/game/client/gameclient.cpp b/TeeworldsTournaments_src_experimental/src/game/client/gameclient.cpp
+--- a/teeworlds-0.6.2-source/src/game/client/gameclient.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/client/gameclient.cpp
+@@ -44,6 +44,7 @@
+ #include "components/particles.h"
+ #include "components/players.h"
+ #include "components/nameplates.h"
++#include "components/streamer.h"
+ #include "components/scoreboard.h"
+ #include "components/skins.h"
+ #include "components/sounds.h"
+@@ -78,6 +79,7 @@ static CSpectator gs_Spectator;
+
+ static CPlayers gs_Players;
+ static CNamePlates gs_NamePlates;
++static CStreamer gs_Streamer;
+ static CItems gs_Items;
+ static CMapImages gs_MapImages;
+
+@@ -148,6 +150,7 @@ void CGameClient::OnConsoleInit()
+ 	m_All.Add(&gs_MapLayersForeGround);
+ 	m_All.Add(&m_pParticles->m_RenderExplosions);
+ 	m_All.Add(&gs_NamePlates);
++	m_All.Add(&gs_Streamer);
+ 	m_All.Add(&m_pParticles->m_RenderGeneral);
+ 	m_All.Add(m_pDamageind);
+ 	m_All.Add(&gs_Hud);
+diff --git a/teeworlds-0.6.2-source/src/game/client/render.h b/TeeworldsTournaments_src_experimental/src/game/client/render.h
+--- a/teeworlds-0.6.2-source/src/game/client/render.h
++++ b/TeeworldsTournaments_src_experimental/src/game/client/render.h
+@@ -71,7 +71,7 @@ public:
+
+ 	// map render methods (gc_render_map.cpp)
+ 	static void RenderEvalEnvelope(CEnvPoint *pPoints, int NumPoints, int Channels, float Time, float *pResult);
+-	void RenderQuads(CQuad *pQuads, int NumQuads, int Flags, ENVELOPE_EVAL pfnEval, void *pUser);
++	void RenderQuads(CQuad *pQuads, int NumQuads, int Flags, ENVELOPE_EVAL pfnEval, void *pUser, float Zoom=1.0f);
+ 	void RenderTilemap(CTile *pTiles, int w, int h, float Scale, vec4 Color, int RenderFlags, ENVELOPE_EVAL pfnEval, void *pUser, int ColorEnv, int ColorEnvOffset);
+
+ 	// helpers
+diff --git a/teeworlds-0.6.2-source/src/game/client/render_map.cpp b/TeeworldsTournaments_src_experimental/src/game/client/render_map.cpp
+--- a/teeworlds-0.6.2-source/src/game/client/render_map.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/client/render_map.cpp
+@@ -78,7 +78,7 @@ static void Rotate(CPoint *pCenter, CPoint *pPoint, float Rotation)
+ 	pPoint->y = (int)(x * sinf(Rotation) + y * cosf(Rotation) + pCenter->y);
+ }
+
+-void CRenderTools::RenderQuads(CQuad *pQuads, int NumQuads, int RenderFlags, ENVELOPE_EVAL pfnEval, void *pUser)
++void CRenderTools::RenderQuads(CQuad *pQuads, int NumQuads, int RenderFlags, ENVELOPE_EVAL pfnEval, void *pUser, float Zoom)
+ {
+ 	Graphics()->QuadsBegin();
+ 	float Conv = 1/255.0f;
+@@ -154,10 +154,10 @@ void CRenderTools::RenderQuads(CQuad *pQuads, int NumQuads, int RenderFlags, ENV
+ 		}
+
+ 		IGraphics::CFreeformItem Freeform(
+-			fx2f(pPoints[0].x)+OffsetX, fx2f(pPoints[0].y)+OffsetY,
+-			fx2f(pPoints[1].x)+OffsetX, fx2f(pPoints[1].y)+OffsetY,
+-			fx2f(pPoints[2].x)+OffsetX, fx2f(pPoints[2].y)+OffsetY,
+-			fx2f(pPoints[3].x)+OffsetX, fx2f(pPoints[3].y)+OffsetY);
++			fx2f(pPoints[0].x*Zoom)+OffsetX, fx2f(pPoints[0].y*Zoom)+OffsetY,
++			fx2f(pPoints[1].x*Zoom)+OffsetX, fx2f(pPoints[1].y*Zoom)+OffsetY,
++			fx2f(pPoints[2].x*Zoom)+OffsetX, fx2f(pPoints[2].y*Zoom)+OffsetY,
++			fx2f(pPoints[3].x*Zoom)+OffsetX, fx2f(pPoints[3].y*Zoom)+OffsetY);
+ 		Graphics()->QuadsDrawFreeform(&Freeform, 1);
+ 	}
+ 	Graphics()->QuadsEnd();
+diff --git a/teeworlds-0.6.2-source/src/game/server/entities/character.cpp b/TeeworldsTournaments_src_experimental/src/game/server/entities/character.cpp
+--- a/teeworlds-0.6.2-source/src/game/server/entities/character.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/entities/character.cpp
+@@ -681,6 +681,10 @@ bool CCharacter::IncreaseHealth(int Amount)
+ 	if(m_Health >= 10)
+ 		return false;
+ 	m_Health = clamp(m_Health+Amount, 0, 10);
++
++	// send hp tp streamer
++	GameServer()->SendHp(m_pPlayer->GetCID(), m_Health, m_Armor);
++
+ 	return true;
+ }
+
+@@ -689,6 +693,10 @@ bool CCharacter::IncreaseArmor(int Amount)
+ 	if(m_Armor >= 10)
+ 		return false;
+ 	m_Armor = clamp(m_Armor+Amount, 0, 10);
++
++	// send hp tp streamer
++	GameServer()->SendHp(m_pPlayer->GetCID(), m_Health, m_Armor);
++
+ 	return true;
+ }
+
+@@ -772,6 +780,9 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
+ 		}
+
+ 		m_Health -= Dmg;
++
++		// send hp tp streamer
++		GameServer()->SendHp(m_pPlayer->GetCID(), m_Health, m_Armor);
+ 	}
+
+ 	m_DamageTakenTick = Server()->Tick();
+diff --git a/teeworlds-0.6.2-source/src/game/server/entities/character.h b/TeeworldsTournaments_src_experimental/src/game/server/entities/character.h
+--- a/teeworlds-0.6.2-source/src/game/server/entities/character.h
++++ b/TeeworldsTournaments_src_experimental/src/game/server/entities/character.h
+@@ -64,6 +64,9 @@ public:
+ 	bool IsAlive() const { return m_Alive; }
+ 	class CPlayer *GetPlayer() { return m_pPlayer; }
+
++	int Health() { return m_Health; }
++	int Armor() { return m_Armor; }
++
+ private:
+ 	// player controlling this character
+ 	class CPlayer *m_pPlayer;
+diff --git a/teeworlds-0.6.2-source/src/game/server/entity.cpp b/TeeworldsTournaments_src_experimental/src/game/server/entity.cpp
+--- a/teeworlds-0.6.2-source/src/game/server/entity.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/entity.cpp
+@@ -38,6 +38,10 @@ int CEntity::NetworkClipped(int SnappingClient, vec2 CheckPos)
+ 	if(SnappingClient == -1)
+ 		return 0;
+
++	// send to streamer
++	if(GameServer()->m_apPlayers[SnappingClient]->IsStreamer() && GameServer()->m_apPlayers[SnappingClient]->GetTeam() == TEAM_SPECTATORS)
++		return 0;
++
+ 	float dx = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.x-CheckPos.x;
+ 	float dy = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.y-CheckPos.y;
+
+@@ -51,6 +55,6 @@ int CEntity::NetworkClipped(int SnappingClient, vec2 CheckPos)
+
+ bool CEntity::GameLayerClipped(vec2 CheckPos)
+ {
+-	return round(CheckPos.x)/32 < -200 || round(CheckPos.x)/32 > GameServer()->Collision()->GetWidth()+200 ||
+-			round(CheckPos.y)/32 < -200 || round(CheckPos.y)/32 > GameServer()->Collision()->GetHeight()+200 ? true : false;
++	return round_to_int(CheckPos.x) / 32 < -200 || round_to_int(CheckPos.x) / 32 > GameServer()->Collision()->GetWidth() + 200 ||
++		round_to_int(CheckPos.y) / 32 < -200 || round_to_int(CheckPos.y) / 32 > GameServer()->Collision()->GetHeight() + 200 ? true : false;
+ }
+diff --git a/teeworlds-0.6.2-source/src/game/server/eventhandler.cpp b/TeeworldsTournaments_src_experimental/src/game/server/eventhandler.cpp
+--- a/teeworlds-0.6.2-source/src/game/server/eventhandler.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/eventhandler.cpp
+@@ -47,7 +47,7 @@ void CEventHandler::Snap(int SnappingClient)
+ 		if(SnappingClient == -1 || CmaskIsSet(m_aClientMasks[i], SnappingClient))
+ 		{
+ 			CNetEvent_Common *ev = (CNetEvent_Common *)&m_aData[m_aOffsets[i]];
+-			if(SnappingClient == -1 || distance(GameServer()->m_apPlayers[SnappingClient]->m_ViewPos, vec2(ev->m_X, ev->m_Y)) < 1500.0f)
++			if(SnappingClient == -1 || GameServer()->m_apPlayers[SnappingClient]->IsStreamer() || distance(GameServer()->m_apPlayers[SnappingClient]->m_ViewPos, vec2(ev->m_X, ev->m_Y)) < 1500.0f)
+ 			{
+ 				void *d = GameServer()->Server()->SnapNewItem(m_aTypes[i], i, m_aSizes[i]);
+ 				if(d)
+diff --git a/teeworlds-0.6.2-source/src/game/server/gamecontext.cpp b/TeeworldsTournaments_src_experimental/src/game/server/gamecontext.cpp
+--- a/teeworlds-0.6.2-source/src/game/server/gamecontext.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamecontext.cpp
+@@ -1,1599 +1,1714 @@
+/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
+/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+#include <new>
+#include <base/math.h>
++#include <base/tl/array.h>
+#include <engine/shared/config.h>
+#include <engine/map.h>
+#include <engine/console.h>
+#include "gamecontext.h"
+#include <game/version.h>
++#include <game/collision.h>
+#include <game/gamecore.h>
+#include "gamemodes/dm.h"
+#include "gamemodes/tdm.h"
+#include "gamemodes/ctf.h"
+#include "gamemodes/mod.h"
+
+enum
+{
+	RESET,
+	NO_RESET
+};
++
++static bool IsSeparator(char c) { return c == ';' || c == ' ' || c == ',' || c == '\t'; };
++
+
+void CGameContext::SendChat(int ChatterClientID, int Team, const char *pText)
+{
+	char aBuf[256];
+	if (ChatterClientID >= 0 && ChatterClientID < MAX_CLIENTS)
+		str_format(aBuf, sizeof(aBuf), "%d:%d:%s: %s", ChatterClientID, Team, Server()->ClientName(ChatterClientID), pText);
+	else
+		str_format(aBuf, sizeof(aBuf), "*** %s", pText);
+	Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, Team != CHAT_ALL ? "teamchat" : "chat", aBuf);
+
+
+	if (Team == CHAT_ALL)
+	{
+		if (ChatterClientID != -1 && m_apPlayers[ChatterClientID])
+		{
++			if (!Server()->IsAuthed(ChatterClientID) && g_Config.m_SvSpectatorPublicMute && m_apPlayers[ChatterClientID]->GetTeam() == TEAM_SPECTATORS)
++			{
+				CNetMsg_Sv_Chat Msg;
++				Msg.m_Team = 1;
++				Msg.m_ClientID = ChatterClientID;
++				Msg.m_pMessage = "No public chat.";
++				Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NORECORD, ChatterClientID);
++			}
++			else
++			{
++				CNetMsg_Sv_Chat Msg;
+				Msg.m_Team = 0;
+				Msg.m_ClientID = ChatterClientID;
+				Msg.m_pMessage = pText;
+				Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
++			}
++		}
++	}
++
+
+
++void CGameContext::SendHp(int ClientID, int Health, int Armor, int To)
++{
++	CNetMsg_Sv_Hp Msg;
++	Msg.m_ClientID = ClientID;
++	Msg.m_Health = clamp(Health, 0, 10);
++	Msg.m_Armor = clamp(Armor, 0, 10);
++
++	if (To == -1)
++	{
++		for (int i = 0; i < MAX_CLIENTS; i++)
++		if (m_apPlayers[i] && m_apPlayers[i]->IsStreamer() && m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS)
++			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
++	}
++	else
++	{
++		if (m_apPlayers[To] && m_apPlayers[To]->IsStreamer() && m_apPlayers[To]->GetTeam() == TEAM_SPECTATORS)
++			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, To);
++	}
++}
++
++void CGameContext::SendHpOfAll(int To)
++{
++	for (int i = 0; i < MAX_CLIENTS; i++)
++	{
++		CCharacter *pChar = GetPlayerChar(i);
++		if (!pChar || i == To)
++			continue;
++
++		SendHp(i, pChar->Health(), pChar->Armor(), To);
++	}
++}
++
+
+
+void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
+{
+	void *pRawMsg = m_NetObjHandler.SecureUnpackMsg(MsgID, pUnpacker);
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+
+	if (!pRawMsg)
+	{
+		if (g_Config.m_Debug)
+		{
+			char aBuf[256];
+			str_format(aBuf, sizeof(aBuf), "dropped weird message '%s' (%d), failed on '%s'", m_NetObjHandler.GetMsgName(MsgID), MsgID, m_NetObjHandler.FailedMsgOn());
+			Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", aBuf);
+		}
+		return;
+	}
+
+	if (Server()->ClientIngame(ClientID))
+	{
+		if (MsgID == NETMSGTYPE_CL_SAY)
+		{
+			if (g_Config.m_SvSpamprotection && pPlayer->m_LastChat && pPlayer->m_LastChat + Server()->TickSpeed() > Server()->Tick())
+				return;
+
+			CNetMsg_Cl_Say *pMsg = (CNetMsg_Cl_Say *)pRawMsg;
+			int Team = pMsg->m_Team ? pPlayer->GetTeam() : CGameContext::CHAT_ALL;
+
+			// trim right and set maximum length to 128 utf8-characters
+			int Length = 0;
+			const char *p = pMsg->m_pMessage;
+			const char *pEnd = 0;
+			while (*p)
+			{
+				const char *pStrOld = p;
+				int Code = str_utf8_decode(&p);
+
+				// check if unicode is not empty
+				if (Code > 0x20 && Code != 0xA0 && Code != 0x034F && (Code < 0x2000 || Code > 0x200F) && (Code < 0x2028 || Code > 0x202F) &&
+					(Code < 0x205F || Code > 0x2064) && (Code < 0x206A || Code > 0x206F) && (Code < 0xFE00 || Code > 0xFE0F) &&
+					Code != 0xFEFF && (Code < 0xFFF9 || Code > 0xFFFC))
+				{
+					pEnd = 0;
+				}
+				else if (pEnd == 0)
+					pEnd = pStrOld;
+
+				if (++Length >= 127)
+				{
+					*(const_cast<char *>(p)) = 0;
+					break;
+				}
+			}
+			if (pEnd != 0)
+				*(const_cast<char *>(pEnd)) = 0;
+
+			// drop empty and autocreated spam messages (more than 16 characters per second)
+			if (Length == 0 || (g_Config.m_SvSpamprotection && pPlayer->m_LastChat && pPlayer->m_LastChat + Server()->TickSpeed()*((15 + Length) / 16) > Server()->Tick()))
+				return;
+
+			pPlayer->m_LastChat = Server()->Tick();
+
+			SendChat(ClientID, Team, pMsg->m_pMessage);
+		}
+		else if (MsgID == NETMSGTYPE_CL_CALLVOTE)
+		{
+			if (g_Config.m_SvSpamprotection && pPlayer->m_LastVoteTry && pPlayer->m_LastVoteTry + Server()->TickSpeed() * 3 > Server()->Tick())
+				return;
+
+			int64 Now = Server()->Tick();
+			pPlayer->m_LastVoteTry = Now;
+			if (pPlayer->GetTeam() == TEAM_SPECTATORS)
+			{
+				SendChatTarget(ClientID, "Spectators aren't allowed to start a vote.");
+				return;
+			}
+
+			if (m_VoteCloseTime)
+			{
+				SendChatTarget(ClientID, "Wait for current vote to end before calling a new one.");
+				return;
+			}
+
+			int Timeleft = pPlayer->m_LastVoteCall + Server()->TickSpeed() * 60 - Now;
+			if (pPlayer->m_LastVoteCall && Timeleft > 0)
+			{
+				char aChatmsg[512] = { 0 };
+				str_format(aChatmsg, sizeof(aChatmsg), "You must wait %d seconds before making another vote", (Timeleft / Server()->TickSpeed()) + 1);
+				SendChatTarget(ClientID, aChatmsg);
+				return;
+			}
+
+			char aChatmsg[512] = { 0 };
+			char aDesc[VOTE_DESC_LENGTH] = { 0 };
+			char aCmd[VOTE_CMD_LENGTH] = { 0 };
+			CNetMsg_Cl_CallVote *pMsg = (CNetMsg_Cl_CallVote *)pRawMsg;
+			const char *pReason = pMsg->m_Reason[0] ? pMsg->m_Reason : "No reason given";
+
+			if (str_comp_nocase(pMsg->m_Type, "option") == 0)
+			{
+				CVoteOptionServer *pOption = m_pVoteOptionFirst;
+				while (pOption)
+				{
+					if (str_comp_nocase(pMsg->m_Value, pOption->m_aDescription) == 0)
+					{
+						str_format(aChatmsg, sizeof(aChatmsg), "'%s' called vote to change server option '%s' (%s)", Server()->ClientName(ClientID),
+							pOption->m_aDescription, pReason);
+						str_format(aDesc, sizeof(aDesc), "%s", pOption->m_aDescription);
+						str_format(aCmd, sizeof(aCmd), "%s", pOption->m_aCommand);
+						break;
+					}
+
+					pOption = pOption->m_pNext;
+				}
+
+				if (!pOption)
+				{
+					str_format(aChatmsg, sizeof(aChatmsg), "'%s' isn't an option on this server", pMsg->m_Value);
+					SendChatTarget(ClientID, aChatmsg);
+					return;
+				}
+			}
+			else if (str_comp_nocase(pMsg->m_Type, "kick") == 0)
+			{
+				if (!g_Config.m_SvVoteKick)
+				{
+					SendChatTarget(ClientID, "Server does not allow voting to kick players");
+					return;
+				}
+
+				if (g_Config.m_SvVoteKickMin)
+				{
+					int PlayerNum = 0;
+					for (int i = 0; i < MAX_CLIENTS; ++i)
+					if (m_apPlayers[i] && m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
+						++PlayerNum;
+
+					if (PlayerNum < g_Config.m_SvVoteKickMin)
+					{
+						str_format(aChatmsg, sizeof(aChatmsg), "Kick voting requires %d players on the server", g_Config.m_SvVoteKickMin);
+						SendChatTarget(ClientID, aChatmsg);
+						return;
+					}
+				}
+
+				int KickID = str_toint(pMsg->m_Value);
+				if (KickID < 0 || KickID >= MAX_CLIENTS || !m_apPlayers[KickID])
+				{
+					SendChatTarget(ClientID, "Invalid client id to kick");
+					return;
+				}
+				if (KickID == ClientID)
+				{
+					SendChatTarget(ClientID, "You can't kick yourself");
+					return;
+				}
+				if (Server()->IsAuthed(KickID))
+				{
+					SendChatTarget(ClientID, "You can't kick admins");
+					char aBufKick[128];
+					str_format(aBufKick, sizeof(aBufKick), "'%s' called for vote to kick you", Server()->ClientName(ClientID));
+					SendChatTarget(KickID, aBufKick);
+					return;
+				}
+
+				str_format(aChatmsg, sizeof(aChatmsg), "'%s' called for vote to kick '%s' (%s)", Server()->ClientName(ClientID), Server()->ClientName(KickID), pReason);
+				str_format(aDesc, sizeof(aDesc), "Kick '%s'", Server()->ClientName(KickID));
+				if (!g_Config.m_SvVoteKickBantime)
+					str_format(aCmd, sizeof(aCmd), "kick %d Kicked by vote", KickID);
+				else
+				{
+					char aAddrStr[NETADDR_MAXSTRSIZE] = { 0 };
+					Server()->GetClientAddr(KickID, aAddrStr, sizeof(aAddrStr));
+					str_format(aCmd, sizeof(aCmd), "ban %s %d Banned by vote", aAddrStr, g_Config.m_SvVoteKickBantime);
+				}
+			}
+			else if (str_comp_nocase(pMsg->m_Type, "spectate") == 0)
+			{
+				if (!g_Config.m_SvVoteSpectate)
+				{
+					SendChatTarget(ClientID, "Server does not allow voting to move players to spectators");
+					return;
+				}
+
+				int SpectateID = str_toint(pMsg->m_Value);
+				if (SpectateID < 0 || SpectateID >= MAX_CLIENTS || !m_apPlayers[SpectateID] || m_apPlayers[SpectateID]->GetTeam() == TEAM_SPECTATORS)
+				{
+					SendChatTarget(ClientID, "Invalid client id to move");
+					return;
+				}
+				if (SpectateID == ClientID)
+				{
+					SendChatTarget(ClientID, "You can't move yourself");
+					return;
+				}
+
+				str_format(aChatmsg, sizeof(aChatmsg), "'%s' called for vote to move '%s' to spectators (%s)", Server()->ClientName(ClientID), Server()->ClientName(SpectateID), pReason);
+				str_format(aDesc, sizeof(aDesc), "move '%s' to spectators", Server()->ClientName(SpectateID));
+				str_format(aCmd, sizeof(aCmd), "set_team %d -1 %d", SpectateID, g_Config.m_SvVoteSpectateRejoindelay);
+			}
+
+			if (aCmd[0])
+			{
+				SendChat(-1, CGameContext::CHAT_ALL, aChatmsg);
+				StartVote(aDesc, aCmd, pReason);
+				pPlayer->m_Vote = 1;
+				pPlayer->m_VotePos = m_VotePos = 1;
+				m_VoteCreator = ClientID;
+				pPlayer->m_LastVoteCall = Now;
+			}
+		}
+		else if (MsgID == NETMSGTYPE_CL_VOTE)
+		{
+			if (!m_VoteCloseTime)
+				return;
+
+			if (pPlayer->m_Vote == 0)
+			{
+				CNetMsg_Cl_Vote *pMsg = (CNetMsg_Cl_Vote *)pRawMsg;
+				if (!pMsg->m_Vote)
+					return;
+
+				pPlayer->m_Vote = pMsg->m_Vote;
+				pPlayer->m_VotePos = ++m_VotePos;
+				m_VoteUpdate = true;
+			}
+		}
+		else if (MsgID == NETMSGTYPE_CL_SETTEAM && !m_World.m_Paused)
+		{
+			CNetMsg_Cl_SetTeam *pMsg = (CNetMsg_Cl_SetTeam *)pRawMsg;
+
+			if (pPlayer->GetTeam() == pMsg->m_Team || (g_Config.m_SvSpamprotection && pPlayer->m_LastSetTeam && pPlayer->m_LastSetTeam + Server()->TickSpeed() * 3 > Server()->Tick() && !Server()->IsAuthed(ClientID)))
+				return;
+
+			if (pMsg->m_Team != TEAM_SPECTATORS && m_LockTeams)
+			{
+				pPlayer->m_LastSetTeam = Server()->Tick();
+				SendBroadcast("Teams are locked", ClientID);
+				return;
+			}
+
+			if (pPlayer->m_TeamChangeTick > Server()->Tick())
+			{
+				pPlayer->m_LastSetTeam = Server()->Tick();
+				int TimeLeft = (pPlayer->m_TeamChangeTick - Server()->Tick()) / Server()->TickSpeed();
+				char aBuf[128];
+				str_format(aBuf, sizeof(aBuf), "Time to wait before changing team: %02d:%02d", TimeLeft / 60, TimeLeft % 60);
+				SendBroadcast(aBuf, ClientID);
+				return;
+			}
+
+			// Switch team on given client and kill/respawn him
+			if (m_pController->CanJoinTeam(pMsg->m_Team, ClientID))
+			{
+				if (m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
+				{
+					pPlayer->m_LastSetTeam = Server()->Tick();
+					if (pPlayer->GetTeam() == TEAM_SPECTATORS || pMsg->m_Team == TEAM_SPECTATORS)
+						m_VoteUpdate = true;
+					pPlayer->SetTeam(pMsg->m_Team);
+					(void)m_pController->CheckTeamBalance();
+					pPlayer->m_TeamChangeTick = Server()->Tick();
+				}
+				else
+					SendBroadcast("Teams must be balanced, please join other team", ClientID);
+			}
+			else
+			{
+				char aBuf[128];
+				str_format(aBuf, sizeof(aBuf), "Only %d active players are allowed", Server()->MaxClients() - g_Config.m_SvSpectatorSlots);
+				SendBroadcast(aBuf, ClientID);
+			}
+		}
+		else if (MsgID == NETMSGTYPE_CL_SETSPECTATORMODE && !m_World.m_Paused)
+		{
+			CNetMsg_Cl_SetSpectatorMode *pMsg = (CNetMsg_Cl_SetSpectatorMode *)pRawMsg;
+
+			if (pPlayer->GetTeam() != TEAM_SPECTATORS || pPlayer->m_SpectatorID == pMsg->m_SpectatorID || ClientID == pMsg->m_SpectatorID ||
+				(g_Config.m_SvSpamprotection && pPlayer->m_LastSetSpectatorMode && pPlayer->m_LastSetSpectatorMode + Server()->TickSpeed() * 3 > Server()->Tick()))
+				return;
+
+			pPlayer->m_LastSetSpectatorMode = Server()->Tick();
+			if (pMsg->m_SpectatorID != SPEC_FREEVIEW && (!m_apPlayers[pMsg->m_SpectatorID] || (m_apPlayers[pMsg->m_SpectatorID]->GetTeam() == TEAM_SPECTATORS && !pPlayer->IsStreamer())))
+				SendChatTarget(ClientID, "Invalid spectator id used");
+			else
+				pPlayer->m_SpectatorID = pMsg->m_SpectatorID;
+		}
+		else if (MsgID == NETMSGTYPE_CL_CHANGEINFO)
+		{
+			if (g_Config.m_SvSpamprotection && pPlayer->m_LastChangeInfo && pPlayer->m_LastChangeInfo + Server()->TickSpeed() * 5 > Server()->Tick())
+				return;
+
+			CNetMsg_Cl_ChangeInfo *pMsg = (CNetMsg_Cl_ChangeInfo *)pRawMsg;
+			pPlayer->m_LastChangeInfo = Server()->Tick();
+
+			// set infos
+			char aOldName[MAX_NAME_LENGTH];
+			str_copy(aOldName, Server()->ClientName(ClientID), sizeof(aOldName));
+			Server()->SetClientName(ClientID, pMsg->m_pName);
+			if (str_comp(aOldName, Server()->ClientName(ClientID)) != 0)
+			{
+				char aChatText[256];
+				str_format(aChatText, sizeof(aChatText), "'%s' changed name to '%s'", aOldName, Server()->ClientName(ClientID));
+				SendChat(-1, CGameContext::CHAT_ALL, aChatText);
+			}
+			Server()->SetClientClan(ClientID, pMsg->m_pClan);
+			Server()->SetClientCountry(ClientID, pMsg->m_Country);
+			str_copy(pPlayer->m_TeeInfos.m_SkinName, pMsg->m_pSkin, sizeof(pPlayer->m_TeeInfos.m_SkinName));
+			pPlayer->m_TeeInfos.m_UseCustomColor = pMsg->m_UseCustomColor;
+			pPlayer->m_TeeInfos.m_ColorBody = pMsg->m_ColorBody;
+			pPlayer->m_TeeInfos.m_ColorFeet = pMsg->m_ColorFeet;
+			m_pController->OnPlayerInfoChange(pPlayer);
+		}
+		else if (MsgID == NETMSGTYPE_CL_EMOTICON && !m_World.m_Paused)
+		{
+			CNetMsg_Cl_Emoticon *pMsg = (CNetMsg_Cl_Emoticon *)pRawMsg;
+
+			if (g_Config.m_SvSpamprotection && pPlayer->m_LastEmote && pPlayer->m_LastEmote + Server()->TickSpeed() * 3 > Server()->Tick())
+				return;
+
+			pPlayer->m_LastEmote = Server()->Tick();
+
+			SendEmoticon(ClientID, pMsg->m_Emoticon);
+		}
+		else if (MsgID == NETMSGTYPE_CL_KILL && !m_World.m_Paused)
+		{
+			if (pPlayer->m_LastKill && pPlayer->m_LastKill + Server()->TickSpeed() * 3 > Server()->Tick())
+				return;
+
+			pPlayer->m_LastKill = Server()->Tick();
+			pPlayer->KillCharacter(WEAPON_SELF);
+		}
++		else if (MsgID == NETMSGTYPE_CL_STREAMER)
++		{
++			pPlayer->SetStreamer();
++
++			// send hp of all players
++			SendHpOfAll(pPlayer->GetCID());
++		}
++	}
+
+
+
+void CGameContext::ConChangeMap(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	pSelf->m_pController->ChangeMap(pResult->NumArguments() ? pResult->GetString(0) : "");
+}
++
++void CGameContext::ConChangeMapRandom(IConsole::IResult *pResult, void *pUserData)
++{
++	CGameContext *pSelf = (CGameContext *)pUserData;
++	if (pResult->NumArguments())
++	{
++		const char *pMapList = pResult->GetString(0);
++		const char *pMap = pMapList;
++		array<char*> MapList;
++		while (*pMap)
++		{
++			int WordLen = 0;
++			while (pMap[WordLen] && !IsSeparator(pMap[WordLen]))
++				WordLen++;
++
++			if (WordLen)
++			{
++				char *pBuf = new char[WordLen + 1];
++				str_copy(pBuf, pMap, WordLen + 1);
++				MapList.add(pBuf);
++				pMap += WordLen;
++			}
++			pMap++;
++		}
++		pSelf->m_pController->ChangeMap(MapList[rand() % MapList.size()]);
++		for (int i = 0; i < MapList.size(); i++)
++			delete[] MapList[i];
++	}
++	else
++		pSelf->m_pController->ChangeMap("");
++}
++
+void CGameContext::ConRestart(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *)pUserData;
++	if (pSelf->m_pController->IsTournamentRound())
++	{
++		pSelf->m_pController->StopTournamentRound();
++	}
+	if (pResult->NumArguments())
+		pSelf->m_pController->DoWarmup(pResult->GetInteger(0));
+	else
+		pSelf->m_pController->StartRound();
+}
++
++void CGameContext::ConStartTournamentRound(IConsole::IResult *pResult, void *pUserData)
++{
++	CGameContext *pSelf = (CGameContext *)pUserData;
++	pSelf->m_pController->StartTournamentRound(pResult->GetString(0));
++	if (pResult->NumArguments() > 1)
++		pSelf->m_pController->DoWarmup(pResult->GetInteger(1));
++	else
++		pSelf->m_pController->DoWarmup(g_Config.m_SvTournamentWarmup);
++}
++
+
+
++void CGameContext::ConVersion(IConsole::IResult *pResult, void *pUserData) // TeeworldsTournaments
++{
++	CGameContext *pSelf = (CGameContext *)pUserData;
++	char aBuf[256];
++	str_format(aBuf, sizeof(aBuf), "%s", GAME_MODVERSION);
++	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "TeeworldsTournaments-Version", aBuf);
++}
+
+
+void CGameContext::OnConsoleInit()
+{
+	m_pServer = Kernel()->RequestInterface<IServer>();
+	m_pConsole = Kernel()->RequestInterface<IConsole>();
+
+	Console()->Register("tune", "si", CFGFLAG_SERVER, ConTuneParam, this, "Tune variable to value");
+	Console()->Register("tune_reset", "", CFGFLAG_SERVER, ConTuneReset, this, "Reset tuning");
+	Console()->Register("tune_dump", "", CFGFLAG_SERVER, ConTuneDump, this, "Dump tuning");
+
+	Console()->Register("pause", "", CFGFLAG_SERVER, ConPause, this, "Pause/unpause game");
+	Console()->Register("change_map", "?r", CFGFLAG_SERVER | CFGFLAG_STORE, ConChangeMap, this, "Change map");
++	Console()->Register("change_map_random", "?r", CFGFLAG_SERVER | CFGFLAG_STORE, ConChangeMapRandom, this, "Change map random");
+	Console()->Register("restart", "?i", CFGFLAG_SERVER | CFGFLAG_STORE, ConRestart, this, "Restart in x seconds (0 = abort)");
++	Console()->Register("start_tournament_round", "s?i", CFGFLAG_SERVER | CFGFLAG_STORE, ConStartTournamentRound, this, "Start a tournament round in x seconds");
+	Console()->Register("broadcast", "r", CFGFLAG_SERVER, ConBroadcast, this, "Broadcast message");
+	Console()->Register("say", "r", CFGFLAG_SERVER, ConSay, this, "Say in chat");
+	Console()->Register("set_team", "ii?i", CFGFLAG_SERVER, ConSetTeam, this, "Set team of player to team");
+	Console()->Register("set_team_all", "i", CFGFLAG_SERVER, ConSetTeamAll, this, "Set team of all players to team");
+	Console()->Register("swap_teams", "", CFGFLAG_SERVER, ConSwapTeams, this, "Swap the current teams");
+	Console()->Register("shuffle_teams", "", CFGFLAG_SERVER, ConShuffleTeams, this, "Shuffle the current teams");
+	Console()->Register("lock_teams", "", CFGFLAG_SERVER, ConLockTeams, this, "Lock/unlock teams");
+
+	Console()->Register("add_vote", "sr", CFGFLAG_SERVER, ConAddVote, this, "Add a voting option");
+	Console()->Register("remove_vote", "s", CFGFLAG_SERVER, ConRemoveVote, this, "remove a voting option");
+	Console()->Register("force_vote", "ss?r", CFGFLAG_SERVER, ConForceVote, this, "Force a voting option");
+	Console()->Register("clear_votes", "", CFGFLAG_SERVER, ConClearVotes, this, "Clears the voting options");
+	Console()->Register("vote", "r", CFGFLAG_SERVER, ConVote, this, "Force a vote to yes/no");
++	Console()->Register("version", "", CFGFLAG_SERVER, ConVersion, this, "Dump the TeeworldsTournaments-Version"); // TeeworldsTournaments
+
+	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
+}
+
+
+
+const char *CGameContext::GameType() { return m_pController && m_pController->m_pGameType ? m_pController->m_pGameType : ""; }
+const char *CGameContext::Version() { return GAME_VERSION; }
+const char *CGameContext::NetVersion() { return GAME_NETVERSION; }
++const char *CGameContext::ModVersion() { return GAME_MODVERSION; } // TeeworldsTournaments
+
+IGameServer *CreateGameServer() { return new CGameContext; }
+diff --git a/teeworlds-0.6.2-source/src/game/server/gamecontext.h b/TeeworldsTournaments_src_experimental/src/game/server/gamecontext.h
+--- a/teeworlds-0.6.2-source/src/game/server/gamecontext.h
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamecontext.h
+@@ -1,183 +1,189 @@
+	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
+	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
+	static void ConTuneDump(IConsole::IResult *pResult, void *pUserData);
+	static void ConPause(IConsole::IResult *pResult, void *pUserData);
+	static void ConChangeMap(IConsole::IResult *pResult, void *pUserData);
++	static void ConChangeMapRandom(IConsole::IResult *pResult, void *pUserData);
+	static void ConRestart(IConsole::IResult *pResult, void *pUserData);
++	static void ConStartTournamentRound(IConsole::IResult *pResult, void *pUserData);
+	static void ConBroadcast(IConsole::IResult *pResult, void *pUserData);
+	static void ConSay(IConsole::IResult *pResult, void *pUserData);
+	static void ConSetTeam(IConsole::IResult *pResult, void *pUserData);
+	static void ConSetTeamAll(IConsole::IResult *pResult, void *pUserData);
+	static void ConSwapTeams(IConsole::IResult *pResult, void *pUserData);
+	static void ConShuffleTeams(IConsole::IResult *pResult, void *pUserData);
+	static void ConLockTeams(IConsole::IResult *pResult, void *pUserData);
+	static void ConAddVote(IConsole::IResult *pResult, void *pUserData);
+	static void ConRemoveVote(IConsole::IResult *pResult, void *pUserData);
+	static void ConForceVote(IConsole::IResult *pResult, void *pUserData);
+	static void ConClearVotes(IConsole::IResult *pResult, void *pUserData);
+	static void ConVote(IConsole::IResult *pResult, void *pUserData);
+	static void ConchainSpecialMotdupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
++	static void ConVersion(IConsole::IResult *pResult, void *pUserData);
+
+	// network
+	void SendChatTarget(int To, const char *pText);
+	void SendChat(int ClientID, int Team, const char *pText);
+	void SendEmoticon(int ClientID, int Emoticon);
+	void SendWeaponPickup(int ClientID, int Weapon);
+	void SendBroadcast(const char *pText, int ClientID);
++	void SendHp(int ClientID, int Health, int Armor, int To = -1);
++	void SendHpOfAll(int To);
+
+
+	virtual const char *GameType();
+	virtual const char *Version();
+	virtual const char *NetVersion();
++	virtual const char *ModVersion(); // TeeworldsTournaments
+};
+--- a/teeworlds-0.6.2-source/src/game/server/gamecontroller.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamecontroller.cpp
+@@ -1,734 +1,762 @@
+IGameController::IGameController(class CGameContext *pGameServer)
+{
+	m_pGameServer = pGameServer;
+	m_pServer = m_pGameServer->Server();
+	m_pGameType = "unknown";
+
+	//
+	DoWarmup(g_Config.m_SvWarmup);
+	m_GameOverTick = -1;
+	m_SuddenDeath = 0;
+	m_RoundStartTick = Server()->Tick();
+	m_RoundCount = 0;
+	m_GameFlags = 0;
+	m_aTeamscore[TEAM_RED] = 0;
+	m_aTeamscore[TEAM_BLUE] = 0;
+	m_aMapWish[0] = 0;
+
+	m_UnbalancedTick = -1;
+	m_ForceBalanced = false;
++	m_TournamentRound = false;
+
+	m_aNumSpawnPoints[0] = 0;
+	m_aNumSpawnPoints[1] = 0;
+	m_aNumSpawnPoints[2] = 0;
+}
+
+void IGameController::EndRound()
+{
+	if (m_Warmup) // game can't end when we are running warmup
+		return;
+
+	GameServer()->m_World.m_Paused = true;
+	m_GameOverTick = Server()->Tick();
+	m_SuddenDeath = 0;
++	if (m_TournamentRound)
++	{
++		if (Server()->DemoRecorder_IsRecording())
++			Server()->DemoRecorder_Stop();
++		StopTournamentRound();
++	}
+}
+
++void IGameController::StartTournamentRound(const char *pFileName)
++{
++	if (Server()->DemoRecorder_IsRecording())
++		Server()->DemoRecorder_Stop();
++	Server()->DemoRecorder_Start(pFileName, true);
++	m_TournamentRound = true;
++}
++
++void IGameController::StopTournamentRound()
++{
++	if (Server()->DemoRecorder_IsRecording())
++		Server()->DemoRecorder_Stop();
++	m_TournamentRound = false;
++}
++
++bool IGameController::IsTournamentRound()
++{
++	return m_TournamentRound;
++}
++
+void IGameController::StartRound()
+{
+	ResetGame();
+
+	m_RoundStartTick = Server()->Tick();
+	m_SuddenDeath = 0;
+	m_GameOverTick = -1;
+	GameServer()->m_World.m_Paused = false;
+	m_aTeamscore[TEAM_RED] = 0;
+	m_aTeamscore[TEAM_BLUE] = 0;
+	m_ForceBalanced = false;
++	if (!m_TournamentRound)
++		Server()->DemoRecorder_HandleAutoStart();
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "start round type='%s' teamplay='%d'", m_pGameType, m_GameFlags&GAMEFLAG_TEAMS);
+	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
+}
+diff --git a/teeworlds-0.6.2-source/src/game/server/gamecontroller.h b/TeeworldsTournaments_src_experimental/src/game/server/gamecontroller.h
+--- a/teeworlds-0.6.2-source/src/game/server/gamecontroller.h
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamecontroller.h
+@@ -1,147 +1,151 @@
++	bool m_TournamentRound;
++
++public:
+[...]
++
++	void StartTournamentRound(const char *pFileName);
++	void StopTournamentRound();
++	bool IsTournamentRound();
++	void StartRound();
+\ No newline at end of file
+--- a/teeworlds-0.6.2-source/src/game/server/gamemodes/ctf.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamemodes/ctf.cpp
+@@ -15,7 +15,7 @@ CGameControllerCTF::CGameControllerCTF(class CGameContext *pGameServer)
+ {
+ 	m_apFlags[0] = 0;
+ 	m_apFlags[1] = 0;
+-	m_pGameType = "CTF";
++	m_pGameType = "ttCTF";
+ 	m_GameFlags = GAMEFLAG_TEAMS|GAMEFLAG_FLAGS;
+ }
+
+--- a/teeworlds-0.6.2-source/src/game/server/gamemodes/dm.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamemodes/dm.cpp
+@@ -6,7 +6,7 @@
+ CGameControllerDM::CGameControllerDM(class CGameContext *pGameServer)
+ : IGameController(pGameServer)
+ {
+-	m_pGameType = "DM";
++	m_pGameType = "ttDM";
+ }
+
+ void CGameControllerDM::Tick()
+--- a/teeworlds-0.6.2-source/src/game/server/gamemodes/mod.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamemodes/mod.cpp
+@@ -7,7 +7,7 @@ CGameControllerMOD::CGameControllerMOD(class CGameContext *pGameServer)
+ {
+ 	// Exchange this to a string that identifies your game mode.
+ 	// DM, TDM and CTF are reserved for teeworlds original modes.
+-	m_pGameType = "MOD";
++	m_pGameType = "ttMOD";
+
+ 	//m_GameFlags = GAMEFLAG_TEAMS; // GAMEFLAG_TEAMS makes it a two-team gamemode
+ }
+--- a/teeworlds-0.6.2-source/src/game/server/gamemodes/tdm.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/gamemodes/tdm.cpp
+@@ -8,7 +8,7 @@
+
+ CGameControllerTDM::CGameControllerTDM(class CGameContext *pGameServer) : IGameController(pGameServer)
+ {
+-	m_pGameType = "TDM";
++	m_pGameType = "ttTDM";
+ 	m_GameFlags = GAMEFLAG_TEAMS;
+ }
+
+--- a/teeworlds-0.6.2-source/src/game/server/player.cpp
++++ b/TeeworldsTournaments_src_experimental/src/game/server/player.cpp
+@@ -21,6 +21,7 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
+ 	m_SpectatorID = SPEC_FREEVIEW;
+ 	m_LastActionTick = Server()->Tick();
+ 	m_TeamChangeTick = Server()->Tick();
++	m_IsStreamer = false;
+ }
+
+ CPlayer::~CPlayer()
+@@ -272,9 +273,12 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
+ 		// update spectator modes
+ 		for(int i = 0; i < MAX_CLIENTS; ++i)
+ 		{
+-			if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_SpectatorID == m_ClientID)
++			if (GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_SpectatorID == m_ClientID && !GameServer()->m_apPlayers[i]->IsStreamer())
+ 				GameServer()->m_apPlayers[i]->m_SpectatorID = SPEC_FREEVIEW;
+ 		}
++
++		// send hp of all players
++		GameServer()->SendHpOfAll(GetCID());
+ 	}
+ }
+
+@@ -290,3 +294,13 @@ void CPlayer::TryRespawn()
+ 	m_pCharacter->Spawn(this, SpawnPos);
+ 	GameServer()->CreatePlayerSpawn(SpawnPos);
+ }
++
++void CPlayer::SetStreamer()
++{
++	m_IsStreamer = true;
++}
++
++bool CPlayer::IsStreamer()
++{
++	return m_IsStreamer;
++}
+diff --git a/teeworlds-0.6.2-source/src/game/server/player.h b/TeeworldsTournaments_src_experimental/src/game/server/player.h
+old mode 100644
+new mode 100755
+index dd804a9..c008cf0
+--- a/teeworlds-0.6.2-source/src/game/server/player.h
++++ b/TeeworldsTournaments_src_experimental/src/game/server/player.h
+@@ -32,6 +32,9 @@ public:
+ 	void OnPredictedInput(CNetObj_PlayerInput *NewInput);
+ 	void OnDisconnect(const char *pReason);
+
++	void SetStreamer();
++	bool IsStreamer();
++
+ 	void KillCharacter(int Weapon = WEAPON_GAME);
+ 	CCharacter *GetCharacter();
+
+@@ -62,6 +65,9 @@ public:
+ 	int m_LastChangeInfo;
+ 	int m_LastEmote;
+ 	int m_LastKill;
++	int m_Team;
++
++	bool m_IsStreamer;
+
+ 	// TODO: clean this up
+ 	struct
+@@ -106,7 +112,6 @@ private:
+ 	//
+ 	bool m_Spawning;
+ 	int m_ClientID;
+-	int m_Team;
+ };
+
+ #endif
+--- a/teeworlds-0.6.2-source/src/game/variables.h
++++ b/TeeworldsTournaments_src_experimental/src/game/variables.h
+@@ -55,6 +55,8 @@ MACRO_CONFIG_INT(UiColorAlpha, ui_color_alpha, 228, 0, 255, CFGFLAG_CLIENT|CFGFL
+
+ MACRO_CONFIG_INT(GfxNoclip, gfx_noclip, 0, 0, 1, CFGFLAG_CLIENT|CFGFLAG_SAVE, "Disable clipping")
+
++MACRO_CONFIG_INT(ClHPBar, cl_hp_bar, 1, 0, 1, CFGFLAG_CLIENT|CFGFLAG_SAVE, "Activate HP bar for supported servers")
++
+ // server
+ MACRO_CONFIG_INT(SvWarmup, sv_warmup, 0, 0, 0, CFGFLAG_SERVER, "Number of seconds to do warmup before round starts")
+ MACRO_CONFIG_STR(SvMotd, sv_motd, 900, "", CFGFLAG_SERVER, "Message of the day to display for the clients")
+@@ -90,4 +92,14 @@ MACRO_CONFIG_INT(SvVoteKickBantime, sv_vote_kick_bantime, 5, 0, 1440, CFGFLAG_SE
+
+ MACRO_CONFIG_INT(DbgFocus, dbg_focus, 0, 0, 1, CFGFLAG_CLIENT, "")
+ MACRO_CONFIG_INT(DbgTuning, dbg_tuning, 0, 0, 1, CFGFLAG_CLIENT, "")
++
++
++
++// Teeworlds Tournaments
++MACRO_CONFIG_INT(SvReservedSlotsPlayers, sv_reserved_slots_players, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of Reserved Slots for players (rivals)")
++MACRO_CONFIG_STR(SvReservedSlotsPlayersPass, sv_reserved_slots_players_pass, 32, "", CFGFLAG_SERVER, "Password to access a Reserved Slot for players (rivals)")
++MACRO_CONFIG_INT(SvReservedSlotsAdmin, sv_reserved_slots_admin, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of Reserved Slots (tournament staff)")
++MACRO_CONFIG_STR(SvReservedSlotsAdminPass, sv_reserved_slots_admin_pass, 32, "", CFGFLAG_SERVER, "Password to access a Reserved Slot (tournament staff)")
++MACRO_CONFIG_INT(SvSpectatorPublicMute, sv_spectator_public_mute, 1, 0, 1, CFGFLAG_SERVER, "Forbid public chat for spectator")
++MACRO_CONFIG_INT(SvTournamentWarmup, sv_tournament_warmup, 15, 0, 0, CFGFLAG_SERVER, "Default number of seconds to do warmup before tournament round starts")
+ #endif
+diff --git a/teeworlds-0.6.2-source/src/game/version.h b/TeeworldsTournaments_src_experimental/src/game/version.h
+--- a/teeworlds-0.6.2-source/src/game/version.h
++++ b/TeeworldsTournaments_src_experimental/src/game/version.h
+@@ -4,6 +4,10 @@
+ #define GAME_VERSION_H
+ #include "generated/nethash.cpp"
+ #define GAME_VERSION "0.6.2"
+-#define GAME_NETVERSION "0.6 " GAME_NETVERSION_HASH
++//#define GAME_NETVERSION "0.6 " GAME_NETVERSION_HASH
++#define GAME_NETVERSION "0.6 626fce9a778df4d4"
++#define GAME_MODVERSION "0.3.0" // TeeworldsTournaments
++
+ static const char GAME_RELEASE_VERSION[8] = {'0', '.', '6', '.', '2', 0};
++
+ #endif
