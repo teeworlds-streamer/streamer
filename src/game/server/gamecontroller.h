@@ -118,6 +118,8 @@ protected:
 
 	void UpdateGameInfo(int ClientID);
 
+	bool m_IsTournamentRound;
+
 public:
 	IGameController(class CGameContext *pGameServer);
 	virtual ~IGameController() {};
@@ -213,6 +215,10 @@ public:
 	
 	int GetRealPlayerNum() const { return m_aTeamSize[TEAM_RED]+m_aTeamSize[TEAM_BLUE]; }
 	int GetStartTeam();
+
+	void StartTournamentRound(const char *pFileName);
+	void StopTournamentRound();
+	bool IsTournamentRound() const { return m_IsTournamentRound; };
 };
 
 #endif

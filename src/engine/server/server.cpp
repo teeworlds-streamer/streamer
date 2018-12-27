@@ -1482,6 +1482,25 @@ bool CServer::DemoRecorder_IsRecording()
 	return m_DemoRecorder.IsRecording();
 }
 
+void CServer::DemoRecorder_Start(const char *pFilename, bool WithTimestamp)
+{
+	char aFilename[128];
+	if(WithTimestamp)
+	{
+		char aDate[20];
+		str_timestamp(aDate, sizeof(aDate));
+		str_format(aFilename, sizeof(aFilename), "demos/%s_%s.demo", pFilename, aDate);
+	}
+	else
+		str_format(aFilename, sizeof(aFilename), "demos/%s.demo", pFilename);
+	m_DemoRecorder.Start(Storage(), m_pConsole, aFilename, GameServer()->NetVersion(), m_aCurrentMap, m_CurrentMapCrc, "server");
+}
+
+void CServer::DemoRecorder_Stop()
+{
+	m_DemoRecorder.Stop();
+}
+
 void CServer::ConRecord(IConsole::IResult *pResult, void *pUser)
 {
 	CServer* pServer = (CServer *)pUser;

@@ -139,5 +139,6 @@ MACRO_CONFIG_INT(DbgTuning, dbg_tuning, 0, 0, 1, CFGFLAG_CLIENT, "")
 
 // Teeworlds Tournaments
 MACRO_CONFIG_INT(SvSpectatorPublicMute, sv_spectator_public_mute, 1, 0, 1, CFGFLAG_SERVER, "Forbid public chat for spectator")
+MACRO_CONFIG_INT(SvTournamentWarmup, sv_tournament_warmup, 15, 0, 0, CFGFLAG_SERVER, "Default number of seconds to do warmup before tournament round starts")
 
 #endif

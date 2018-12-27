@@ -1138,10 +1138,24 @@ void CGameContext::ConChangeMapRandom(IConsole::IResult *pResult, void *pUserDat
 void CGameContext::ConRestart(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
+	if (pSelf->m_pController->IsTournamentRound())
+	{
+		pSelf->m_pController->StopTournamentRound();
+	}
 	if(pResult->NumArguments())
 		pSelf->m_pController->DoWarmup(clamp(pResult->GetInteger(0), -1, 1000));
 	else
 		pSelf->m_pController->DoWarmup(0);
+}
+
+void CGameContext::ConStartTournamentRound(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	pSelf->m_pController->StartTournamentRound(pResult->GetString(0));
+	if (pResult->NumArguments() > 1)
+		pSelf->m_pController->DoWarmup(pResult->GetInteger(1));
+	else
+		pSelf->m_pController->DoWarmup(g_Config.m_SvTournamentWarmup);
 }
 
 void CGameContext::ConSay(IConsole::IResult *pResult, void *pUserData)
@@ -1453,6 +1467,7 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("change_map", "?r", CFGFLAG_SERVER|CFGFLAG_STORE, ConChangeMap, this, "Change map");
 	Console()->Register("change_map_random", "?r", CFGFLAG_SERVER|CFGFLAG_STORE, ConChangeMapRandom, this, "Change map random");
 	Console()->Register("restart", "?i", CFGFLAG_SERVER|CFGFLAG_STORE, ConRestart, this, "Restart in x seconds (0 = abort)");
+	Console()->Register("start_tournament_round", "s?i", CFGFLAG_SERVER | CFGFLAG_STORE, ConStartTournamentRound, this, "Start a tournament round in x seconds");
 	Console()->Register("say", "r", CFGFLAG_SERVER, ConSay, this, "Say in chat");
 	Console()->Register("broadcast", "r", CFGFLAG_SERVER, ConBroadcast, this, "Broadcast message");
 	Console()->Register("set_team", "ii?i", CFGFLAG_SERVER, ConSetTeam, this, "Set team of player to team");

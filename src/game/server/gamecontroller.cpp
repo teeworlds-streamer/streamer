@@ -50,6 +50,8 @@ IGameController::IGameController(CGameContext *pGameServer)
 	m_aNumSpawnPoints[0] = 0;
 	m_aNumSpawnPoints[1] = 0;
 	m_aNumSpawnPoints[2] = 0;
+
+	m_IsTournamentRound = false;
 }
 
 //activity
@@ -612,8 +614,30 @@ void IGameController::SetGameState(EGameState GameState, int Timer)
 			m_GameStateTimer = Timer*Server()->TickSpeed();
 			m_SuddenDeath = 0;
 			GameServer()->m_World.m_Paused = true;
+
+			if (IsTournamentRound())
+			{
+				if (Server()->DemoRecorder_IsRecording())
+					Server()->DemoRecorder_Stop();
+				StopTournamentRound();
+			}
 		}
 	}
+}
+
+void IGameController::StartTournamentRound(const char *pFileName)
+{
+	if (Server()->DemoRecorder_IsRecording())
+		Server()->DemoRecorder_Stop();
+	Server()->DemoRecorder_Start(pFileName, true);
+	m_IsTournamentRound = true;
+}
+
+void IGameController::StopTournamentRound()
+{
+	if (Server()->DemoRecorder_IsRecording())
+		Server()->DemoRecorder_Stop();
+	m_IsTournamentRound = false;
 }
 
 void IGameController::StartMatch()
@@ -630,7 +654,8 @@ void IGameController::StartMatch()
 	else
 		SetGameState(IGS_WARMUP_GAME, TIMER_INFINITE);
 
-	Server()->DemoRecorder_HandleAutoStart();
+	if (!IsTournamentRound())
+		Server()->DemoRecorder_HandleAutoStart();
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "start match type='%s' teamplay='%d'", m_pGameType, m_GameFlags&GAMEFLAG_TEAMS);
 	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
