@@ -214,7 +214,18 @@ void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *p
 	Msg.m_TargetID = -1;
 
 	if(Mode == CHAT_ALL)
-		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
+	{
+		if(!Server()->IsAuthed(ChatterClientID) && g_Config.m_SvSpectatorPublicMute
+				&& m_apPlayers[ChatterClientID]->GetTeam() == TEAM_SPECTATORS)
+		{
+			Msg.m_TargetID = ChatterClientID;
+			Msg.m_ClientID = -1;
+			Msg.m_pMessage = "No public chat.";
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ChatterClientID);
+		}
+		else
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
+	}
 	else if(Mode == CHAT_TEAM)
 	{
 		// pack one for the recording only
