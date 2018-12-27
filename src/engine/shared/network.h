@@ -134,6 +134,12 @@ enum
 	NET_ENUM_TERMINATOR
 };
 
+enum
+{
+	SLOT_DEFAULT = 0,
+	SLOT_PLAYER,
+	SLOT_ADMIN
+};
 
 typedef int (*NETFUNC_DELCLIENT)(int ClientID, const char* pReason, void *pUser);
 typedef int (*NETFUNC_NEWCLIENT)(int ClientID, void *pUser);
@@ -284,6 +290,7 @@ private:
 	unsigned short m_Ack;
 	unsigned short m_PeerAck;
 	unsigned m_State;
+	int m_Slot;
 
 	int m_RemoteClosed;
 	bool m_BlockCloseMsg;
@@ -350,6 +357,9 @@ public:
 	int64 ConnectTime() const { return m_LastUpdateTime; }
 
 	int AckSequence() const { return m_Ack; }
+
+	int GetSlotType() const { return m_Slot; }
+	void SetSlotType(int Type) { m_Slot = Type; }
 };
 
 class CConsoleNetConnection
@@ -447,6 +457,8 @@ public:
 	class CNetBan *NetBan() const { return m_pNetBan; }
 	int NetType() const { return m_Socket.type; }
 	int MaxClients() const { return m_MaxClients; }
+	int GetSlotType(int ClientID) const { return m_aSlots[ClientID].m_Connection.GetSlotType(); }
+	void SetSlotType(int ClientID, int Type) { return m_aSlots[ClientID].m_Connection.SetSlotType(Type); }
 
 	//
 	void SetMaxClientsPerIP(int Max);

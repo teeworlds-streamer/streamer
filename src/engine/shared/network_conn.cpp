@@ -29,6 +29,8 @@ void CNetConnection::Reset()
 	m_Buffer.Init();
 
 	mem_zero(&m_Construct, sizeof(m_Construct));
+
+	m_Slot = SLOT_DEFAULT;
 }
 
 void CNetConnection::SetToken(TOKEN Token)

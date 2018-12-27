@@ -306,3 +306,4 @@ void CNetServer::SetMaxClientsPerIP(int Max)
 
 	m_MaxClientsPerIP = Max;
 }
+

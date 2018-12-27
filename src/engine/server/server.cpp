@@ -776,6 +776,9 @@ void CServer::UpdateClientRconCommands()
 void CServer::ProcessClientPacket(CNetChunk *pPacket)
 {
 	int ClientID = pPacket->m_ClientID;
+	int PlayerCount = 0;
+	int ReservedSlotsPlayers = g_Config.m_SvReservedSlotsPlayers;
+	int ReservedSlotsAdmin = g_Config.m_SvReservedSlotsAdmin;
 	CUnpacker Unpacker;
 	Unpacker.Reset(pPacket->m_pData, pPacket->m_DataSize);
 
@@ -805,7 +808,45 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				}
 
 				const char *pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
-				if(g_Config.m_Password[0] != 0 && str_comp(g_Config.m_Password, pPassword) != 0)
+
+				for (int i = 0; i < MAX_CLIENTS; i++)
+				{
+					if (m_aClients[i].m_State != CClient::STATE_EMPTY)
+					{
+						PlayerCount++;
+
+						if (m_NetServer.GetSlotType(i) == SLOT_PLAYER)
+							--ReservedSlotsPlayers;
+						else if (m_NetServer.GetSlotType(i) == SLOT_ADMIN)
+							--ReservedSlotsAdmin;
+					}
+				}
+
+				char aBuf[256];
+				str_format(aBuf, sizeof(aBuf), "PlayerCount: %d; RSPlayers: %d; RSAdmin: %d", PlayerCount, ReservedSlotsPlayers, ReservedSlotsAdmin);
+				Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", aBuf);
+
+				if (ReservedSlotsPlayers > 0 && PlayerCount > g_Config.m_SvMaxClients - ReservedSlotsPlayers - ReservedSlotsAdmin // Teeworlds Tournaments
+					&& g_Config.m_SvReservedSlotsPlayersPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsPlayersPass, pPassword) == 0)
+				{
+					// Client is player
+					m_NetServer.SetSlotType(ClientID, SLOT_PLAYER);
+				}
+				else if (ReservedSlotsAdmin > 0 && PlayerCount > g_Config.m_SvMaxClients - ReservedSlotsPlayers - ReservedSlotsAdmin  // Teeworlds Tournaments
+					&& g_Config.m_SvReservedSlotsAdminPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsAdminPass, pPassword) == 0)
+				{
+					// Client is Admin
+					m_NetServer.SetSlotType(ClientID, SLOT_ADMIN);
+				}
+				else if (PlayerCount > g_Config.m_SvMaxClients - ReservedSlotsPlayers - ReservedSlotsAdmin
+					&& ((ReservedSlotsPlayers > 0 && g_Config.m_SvReservedSlotsPlayersPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsPlayersPass, pPassword) != 0)
+					|| (ReservedSlotsAdmin > 0 && g_Config.m_SvReservedSlotsAdminPass[0] != 0 && str_comp(g_Config.m_SvReservedSlotsAdminPass, pPassword) != 0))) //TeeworldsTournaments
+				{
+					/* wrong password */
+					m_NetServer.Drop(ClientID, "Reserved Slot - password");
+					return;
+				}
+				else if(g_Config.m_Password[0] != 0 && str_comp(g_Config.m_Password, pPassword) != 0)
 				{
 					// wrong password
 					m_NetServer.Drop(ClientID, "Wrong password");

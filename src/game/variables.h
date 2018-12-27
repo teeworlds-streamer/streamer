@@ -138,6 +138,11 @@ MACRO_CONFIG_INT(DbgFocus, dbg_focus, 0, 0, 1, CFGFLAG_CLIENT, "")
 MACRO_CONFIG_INT(DbgTuning, dbg_tuning, 0, 0, 1, CFGFLAG_CLIENT, "")
 
 // Teeworlds Tournaments
+MACRO_CONFIG_INT(SvReservedSlotsPlayers, sv_reserved_slots_players, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of Reserved Slots for players (rivals)")
+MACRO_CONFIG_STR(SvReservedSlotsPlayersPass, sv_reserved_slots_players_pass, 32, "", CFGFLAG_SERVER, "Password to access a Reserved Slot for players (rivals)")
+MACRO_CONFIG_INT(SvReservedSlotsAdmin, sv_reserved_slots_admin, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of Reserved Slots (tournament staff)")
+MACRO_CONFIG_STR(SvReservedSlotsAdminPass, sv_reserved_slots_admin_pass, 32, "", CFGFLAG_SERVER, "Password to access a Reserved Slot (tournament staff)")
+
 MACRO_CONFIG_INT(SvSpectatorPublicMute, sv_spectator_public_mute, 1, 0, 1, CFGFLAG_SERVER, "Forbid public chat for spectator")
 MACRO_CONFIG_INT(SvTournamentWarmup, sv_tournament_warmup, 15, 0, 0, CFGFLAG_SERVER, "Default number of seconds to do warmup before tournament round starts")
 
