@@ -3,6 +3,7 @@
 #include <engine/shared/config.h>
 
 #include <game/mapitems.h>
+#include <string.h>
 
 #include "entities/character.h"
 #include "entities/pickup.h"
@@ -33,7 +34,7 @@ IGameController::IGameController(CGameContext *pGameServer)
 	if(g_Config.m_SvWarmup)
 		SetGameState(IGS_WARMUP_USER, g_Config.m_SvWarmup);
 	else
-		SetGameState(IGS_WARMUP_GAME, TIMER_INFINITE);
+		SetGameState(IGS_WARMUP_GAME, 1);
 
 	// info
 	m_GameFlags = 0;
@@ -627,15 +628,88 @@ void IGameController::SetGameState(EGameState GameState, int Timer)
 
 void IGameController::StartTournamentRound(const char *pFileName)
 {
-	if (Server()->DemoRecorder_IsRecording())
-		Server()->DemoRecorder_Stop();
-	Server()->DemoRecorder_Start(pFileName, true);
 	m_IsTournamentRound = true;
+
+	if(Server()->DemoRecorder_IsRecording())
+		Server()->DemoRecorder_Stop();
+
+	if(pFileName)
+	{
+		Server()->DemoRecorder_Start(pFileName, true);
+		return;
+	}
+
+	char aaTeamnames[2][128];
+	mem_zero(aaTeamnames, 2 * 128 * sizeof(char));
+	const CPlayer *pP;
+
+	int NumOfPlayers = GetRealPlayerNum();
+
+	if(IsTeamplay()) {
+		for(int i = 0; i < MAX_CLIENTS; ++i)
+		{
+			pP = GameServer()->m_apPlayers[i];
+			if(pP)
+			{
+				if(pP->GetTeam() == TEAM_SPECTATORS)
+					continue;
+
+				if(!aaTeamnames[pP->GetTeam()][0])
+				{
+					if(strlen(Server()->ClientClan(i)) > 0)
+						str_copy(aaTeamnames[pP->GetTeam()], Server()->ClientClan(i), sizeof(aaTeamnames[pP->GetTeam()]));
+					else
+						str_copy(aaTeamnames[pP->GetTeam()], Server()->ClientName(i), sizeof(aaTeamnames[pP->GetTeam()]));
+
+					if(aaTeamnames[TEAM_RED][0] && aaTeamnames[TEAM_BLUE][0])
+						break;
+				}
+			}
+		}
+	}
+	else
+	{
+		for(int i = 0; i < MAX_CLIENTS; ++i)
+		{
+			pP = GameServer()->m_apPlayers[i];
+			if(pP)
+			{
+				if(pP->GetTeam() == TEAM_SPECTATORS)
+					continue;
+
+				if(!aaTeamnames[0][0])
+				{
+					str_copy(aaTeamnames[0], Server()->ClientName(i), sizeof(aaTeamnames[0]));
+				}
+				else if(!aaTeamnames[1][0] && NumOfPlayers == 2)
+				{
+					str_copy(aaTeamnames[1], Server()->ClientName(i), sizeof(aaTeamnames[1]));
+				}
+				else
+					break;
+			}
+		}
+	}
+	char aBuf[264] = {0};
+	if(!aaTeamnames[TEAM_RED][0] && !aaTeamnames[TEAM_BLUE][0])
+		return;
+	else if(!aaTeamnames[TEAM_RED][0])
+		str_format(aBuf, sizeof(aBuf), "%s_solo", aaTeamnames[TEAM_BLUE]);
+	else if(!aaTeamnames[TEAM_BLUE][0])
+	{
+		if(!IsTeamplay() && NumOfPlayers >= 2)
+			str_format(aBuf, sizeof(aBuf), "%s_vs_%i_other", aaTeamnames[TEAM_RED], NumOfPlayers);
+		else
+			str_format(aBuf, sizeof(aBuf), "%s_solo", aaTeamnames[TEAM_RED]);
+	}
+	else
+		str_format(aBuf, sizeof(aBuf), "%s_vs_%s", aaTeamnames[TEAM_RED], aaTeamnames[TEAM_BLUE]);
+	Server()->DemoRecorder_Start(aBuf, true);
 }
 
 void IGameController::StopTournamentRound()
 {
-	if (Server()->DemoRecorder_IsRecording())
+	if(Server()->DemoRecorder_IsRecording())
 		Server()->DemoRecorder_Stop();
 	m_IsTournamentRound = false;
 }
@@ -649,10 +723,10 @@ void IGameController::StartMatch()
 	m_aTeamscore[TEAM_BLUE] = 0;
 
 	// start countdown if there're enough players, otherwise do warmup till there're
-	if(HasEnoughPlayers())
+	//if(HasEnoughPlayers())
 		SetGameState(IGS_START_COUNTDOWN);
-	else
-		SetGameState(IGS_WARMUP_GAME, TIMER_INFINITE);
+	// else
+	//	SetGameState(IGS_WARMUP_GAME, TIMER_INFINITE);
 
 	if (!IsTournamentRound())
 		Server()->DemoRecorder_HandleAutoStart();
