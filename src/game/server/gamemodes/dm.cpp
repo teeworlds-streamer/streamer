@@ -6,5 +6,5 @@
 CGameControllerDM::CGameControllerDM(CGameContext *pGameServer)
 : IGameController(pGameServer)
 {
-	m_pGameType = "ttDM";
+	m_pGameType = "#DM";
 }
