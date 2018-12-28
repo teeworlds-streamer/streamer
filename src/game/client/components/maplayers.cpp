@@ -358,12 +358,6 @@ void CMapLayers::OnRender()
 
 					CQuad *pQuads = (CQuad *)pLayers->Map()->GetDataSwapped(pQLayer->m_Data);
 
-					/*
-					Graphics()->BlendNone();
-					if(!g && !l)
-						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_OPAQUE, EnvelopeEval, this, m_pClient->m_pCamera->GetZoom());
-					else
-						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_OPAQUE, EnvelopeEval, this); */
 					Graphics()->BlendNormal();
 					if(!g && !l)
 						RenderTools()->RenderQuads(pQuads, pQLayer->m_NumQuads, LAYERRENDERFLAG_TRANSPARENT, EnvelopeEval, this, m_pClient->m_pCamera->GetZoom());
