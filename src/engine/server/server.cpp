@@ -1648,7 +1648,7 @@ void CServer::DemoRecorder_Start(const char *pFilename, bool WithTimestamp)
 	}
 	else
 		str_format(aFilename, sizeof(aFilename), "demos/%s.demo", pFilename);
-	m_DemoRecorder.Start(Storage(), m_pConsole, aFilename, GameServer()->NetVersion(), m_aCurrentMap, m_CurrentMapCrc, "server");
+	m_DemoRecorder.Start(Storage(), m_pConsole, aFilename, GameServer()->NetVersion(), m_aCurrentMap, m_CurrentMapSha256, m_CurrentMapCrc, "server");
 }
 
 void CServer::DemoRecorder_Stop()

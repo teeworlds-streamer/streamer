@@ -1038,12 +1038,11 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			pPlayer->m_LastReadyChange = Server()->Tick();
 			m_pController->OnPlayerReadyChange(pPlayer);
 		}
-<<<<<<< HEAD
 		else if (MsgID == NETMSGTYPE_CL_STREAMER)
 		{
 			pPlayer->SetStreamer();
 			SendHpOfAll(pPlayer->GetCID());
-=======
+		}
 		else if(MsgID == NETMSGTYPE_CL_SKINCHANGE)
 		{
 			if(pPlayer->m_LastChangeInfo && pPlayer->m_LastChangeInfo+Server()->TickSpeed()*5 > Server()->Tick())
@@ -1067,7 +1066,6 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 				SendSkinChange(pPlayer->GetCID(), i);
 			}
->>>>>>> 0.7.3.1
 		}
 	}
 	else
