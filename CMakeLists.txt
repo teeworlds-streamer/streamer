@@ -1347,6 +1347,8 @@ if(CLIENT)
     components/spectator.h
     components/stats.cpp
     components/stats.h
+    components/streamer.cpp
+    components/streamer.h
     components/voting.cpp
     components/voting.h
     gameclient.cpp
